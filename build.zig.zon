@@ -1,0 +1,12 @@
+.{
+    .name = .shutter,
+    .version = "0.0.0",
+    .fingerprint = 0x845d8ff50c780984,
+    .minimum_zig_version = "0.15.1",
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "LICENSE",
+    },
+}
