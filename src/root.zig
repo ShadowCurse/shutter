@@ -51,12 +51,7 @@ pub const Display = struct {
         };
         pub const Error = struct {
             object_id: u32,
-            code: enum {
-                invalid_object,
-                invalid_method,
-                no_memory,
-                implementation,
-            },
+            code: u32,
             message: []const u8,
 
             pub fn parse(payload: []const u32) Error {
@@ -69,7 +64,7 @@ pub const Display = struct {
 
                 return .{
                     .object_id = object_id,
-                    .code = @enumFromInt(code),
+                    .code = code,
                     .message = message,
                 };
             }
@@ -85,6 +80,12 @@ pub const Display = struct {
                 };
             }
         };
+    };
+    pub const Errors = enum(u32) {
+        invalid_object,
+        invalid_method,
+        no_memory,
+        implementation,
     };
 };
 
@@ -149,6 +150,40 @@ pub const Registry = struct {
 
         pub const GlobalRemove = struct {
             name: u32,
+
+            pub fn parse(payload: []const u32) GlobalRemove {
+                const name = payload[0];
+                return .{
+                    .name = name,
+                };
+            }
+        };
+    };
+};
+
+pub const Callback = struct {
+    pub const Events = struct {
+        pub fn parse(opcode: u16, payload: []const u32) Event {
+            const event_opcode: Opcodes = @enumFromInt(opcode);
+            switch (event_opcode) {
+                .done => {
+                    const done = Done.parse(payload);
+                    return .{ .callback_done = done };
+                },
+            }
+        }
+        pub const Opcodes = enum(u16) {
+            done,
+        };
+        pub const Done = struct {
+            callback_data: u32,
+
+            pub fn parse(payload: []const u32) Done {
+                const callback_data = payload[0];
+                return .{
+                    .callback_data = callback_data,
+                };
+            }
         };
     };
 };
@@ -164,10 +199,40 @@ pub const Compositor = struct {
         };
         pub const CreateRegion = extern struct {
             header: RequestHeader = .{
-                .opcode = 0,
-                .msg_len = @sizeOf(CreateSurface),
+                .opcode = 1,
+                .msg_len = @sizeOf(CreateRegion),
             },
             id: u32,
+        };
+    };
+};
+
+pub const ShmPool = struct {
+    pub const Requests = struct {
+        pub const CreateBuffer = extern struct {
+            header: RequestHeader = .{
+                .opcode = 0,
+                .msg_len = @sizeOf(CreateBuffer),
+            },
+            id: u32,
+            offset: i32,
+            width: i32,
+            height: i32,
+            stride: i32,
+            format: Shm.Events.Format.Values,
+        };
+        pub const Destroy = extern struct {
+            header: RequestHeader = .{
+                .opcode = 1,
+                .msg_len = @sizeOf(Destroy),
+            },
+        };
+        pub const Resize = extern struct {
+            header: RequestHeader = .{
+                .opcode = 2,
+                .msg_len = @sizeOf(Resize),
+            },
+            size: i32,
         };
     };
 };
@@ -339,22 +404,37 @@ pub const Shm = struct {
             }
         };
     };
+    pub const Errors = enum(u32) {
+        invalid_format,
+        invalid_stride,
+        invalid_fd,
+    };
 };
 
-pub const ShmPool = struct {
+pub const Buffer = struct {
     pub const Requests = struct {
-        pub const CreateBuffer = extern struct {
+        pub const Destroy = extern struct {
             header: RequestHeader = .{
                 .opcode = 0,
-                .msg_len = @sizeOf(CreateBuffer),
+                .msg_len = @sizeOf(Destroy),
             },
-            id: u32,
-            offset: i32,
-            width: i32,
-            height: i32,
-            stride: i32,
-            format: Shm.Events.Format.Values,
         };
+    };
+
+    pub const Events = struct {
+        pub fn parse(opcode: u16, payload: []const u32) Event {
+            _ = payload;
+            const event_opcode: Opcodes = @enumFromInt(opcode);
+            switch (event_opcode) {
+                .release => {
+                    return .{ .buffer_release = Release{} };
+                },
+            }
+        }
+        pub const Opcodes = enum(u16) {
+            release,
+        };
+        pub const Release = struct {};
     };
 };
 
@@ -385,39 +465,511 @@ pub const Surface = struct {
             width: i32,
             height: i32,
         };
+        pub const Frame = extern struct {
+            header: RequestHeader = .{
+                .opcode = 3,
+                .msg_len = @sizeOf(Frame),
+            },
+            callback: u32,
+        };
+        pub const SetOpaqueRegion = extern struct {
+            header: RequestHeader = .{
+                .opcode = 4,
+                .msg_len = @sizeOf(SetOpaqueRegion),
+            },
+            region: u32,
+        };
+        pub const SetInputRegion = extern struct {
+            header: RequestHeader = .{
+                .opcode = 5,
+                .msg_len = @sizeOf(SetInputRegion),
+            },
+            region: u32,
+        };
         pub const Commit = extern struct {
             header: RequestHeader = .{
                 .opcode = 6,
                 .msg_len = @sizeOf(Commit),
             },
         };
+        pub const SetBufferTransform = extern struct {
+            header: RequestHeader = .{
+                .opcode = 7,
+                .msg_len = @sizeOf(SetBufferTransform),
+            },
+            transform: u32,
+        };
+        pub const SetBufferScale = extern struct {
+            header: RequestHeader = .{
+                .opcode = 8,
+                .msg_len = @sizeOf(SetBufferScale),
+            },
+            scale: i32,
+        };
+        pub const DamageBuffer = extern struct {
+            header: RequestHeader = .{
+                .opcode = 9,
+                .msg_len = @sizeOf(DamageBuffer),
+            },
+            x: i32,
+            y: i32,
+            width: i32,
+            height: i32,
+        };
+        pub const Offset = extern struct {
+            header: RequestHeader = .{
+                .opcode = 10,
+                .msg_len = @sizeOf(Offset),
+            },
+            x: i32,
+            y: i32,
+        };
     };
-};
-
-pub const Callback = struct {
     pub const Events = struct {
         pub fn parse(opcode: u16, payload: []const u32) Event {
             const event_opcode: Opcodes = @enumFromInt(opcode);
             switch (event_opcode) {
-                .done => {
-                    const done = Done.parse(payload);
-                    return .{ .callback_done = done };
+                .enter => {
+                    const enter = Enter.parse(payload);
+                    return .{ .surface_enter = enter };
+                },
+                .leave => {
+                    const leave = Leave.parse(payload);
+                    return .{ .surface_leave = leave };
+                },
+                .preferred_buffer_scale => {
+                    const scale = PreferredBufferScale.parse(payload);
+                    return .{ .surface_preferred_buffer_scale = scale };
+                },
+                .preferred_buffer_transform => {
+                    const transform = PreferredBufferTransform.parse(payload);
+                    return .{ .surface_preferred_buffer_transform = transform };
                 },
             }
         }
         pub const Opcodes = enum(u16) {
-            done,
+            enter,
+            leave,
+            preferred_buffer_scale,
+            preferred_buffer_transform,
         };
-        pub const Done = struct {
-            callback_data: u32,
+        pub const Enter = struct {
+            output: u32,
 
-            pub fn parse(payload: []const u32) Done {
-                const callback_data = payload[0];
+            pub fn parse(payload: []const u32) Enter {
+                const output = payload[0];
                 return .{
-                    .callback_data = callback_data,
+                    .output = output,
                 };
             }
         };
+        pub const Leave = struct {
+            output: u32,
+
+            pub fn parse(payload: []const u32) Leave {
+                const output = payload[0];
+                return .{
+                    .output = output,
+                };
+            }
+        };
+        pub const PreferredBufferScale = struct {
+            factor: i32,
+
+            pub fn parse(payload: []const u32) PreferredBufferScale {
+                const factor = payload[0];
+                return .{
+                    .factor = @bitCast(factor),
+                };
+            }
+        };
+        pub const PreferredBufferTransform = struct {
+            transform: u32,
+
+            pub fn parse(payload: []const u32) PreferredBufferTransform {
+                const transform = payload[0];
+                return .{
+                    .transform = transform,
+                };
+            }
+        };
+    };
+    pub const Errors = enum(u32) {
+        invalid_scale,
+        invalid_transform,
+        invalid_size,
+        invalid_offset,
+        defunct_role_object,
+    };
+};
+
+pub const XDGWmBase = struct {
+    pub const Requests = struct {
+        pub const Destroy = extern struct {
+            header: RequestHeader = .{
+                .opcode = 0,
+                .msg_len = @sizeOf(Destroy),
+            },
+        };
+        pub const CreatePositioner = extern struct {
+            header: RequestHeader = .{
+                .opcode = 1,
+                .msg_len = @sizeOf(CreatePositioner),
+            },
+            id: u32,
+        };
+        pub const GetXDGSurface = extern struct {
+            header: RequestHeader = .{
+                .opcode = 2,
+                .msg_len = @sizeOf(GetXDGSurface),
+            },
+            id: u32,
+            surface: u32,
+        };
+        pub const Pong = extern struct {
+            header: RequestHeader = .{
+                .opcode = 3,
+                .msg_len = @sizeOf(Pong),
+            },
+            serial: u32,
+        };
+    };
+    pub const Events = struct {
+        pub fn parse(opcode: u16, payload: []const u32) Event {
+            const event_opcode: Opcodes = @enumFromInt(opcode);
+            switch (event_opcode) {
+                .ping => {
+                    const ping = Ping.parse(payload);
+                    return .{ .xdg_wm_base_ping = ping };
+                },
+            }
+        }
+        pub const Opcodes = enum(u16) {
+            ping,
+        };
+        pub const Ping = struct {
+            serial: u32,
+
+            pub fn parse(payload: []const u32) Ping {
+                const serial = payload[0];
+                return .{
+                    .serial = serial,
+                };
+            }
+        };
+    };
+    pub const Errors = enum(u32) {
+        role,
+        defunct_surfaces,
+        not_the_topmost_popup,
+        invalid_popup_parent,
+        invalid_surface_state,
+        invalid_positioner,
+        unresponsive,
+    };
+};
+
+pub const XDGSurface = struct {
+    pub const Requests = struct {
+        pub const Destroy = extern struct {
+            header: RequestHeader = .{
+                .opcode = 0,
+                .msg_len = @sizeOf(Destroy),
+            },
+        };
+        pub const GetToplevel = extern struct {
+            header: RequestHeader = .{
+                .opcode = 1,
+                .msg_len = @sizeOf(GetToplevel),
+            },
+            id: u32,
+        };
+        pub const GetPopup = extern struct {
+            header: RequestHeader = .{
+                .opcode = 2,
+                .msg_len = @sizeOf(GetPopup),
+            },
+            id: u32,
+            parent: u32,
+            positioner: u32,
+        };
+        pub const SetWindowGeometry = extern struct {
+            header: RequestHeader = .{
+                .opcode = 3,
+                .msg_len = @sizeOf(SetWindowGeometry),
+            },
+            x: i32,
+            y: i32,
+            width: i32,
+            height: i32,
+        };
+        pub const AckConfigure = extern struct {
+            header: RequestHeader = .{
+                .opcode = 4,
+                .msg_len = @sizeOf(AckConfigure),
+            },
+            serial: u32,
+        };
+    };
+    pub const Events = struct {
+        pub fn parse(opcode: u16, payload: []const u32) Event {
+            const event_opcode: Opcodes = @enumFromInt(opcode);
+            switch (event_opcode) {
+                .configure => {
+                    const configure = Configure.parse(payload);
+                    return .{ .xdg_surface_configure = configure };
+                },
+            }
+        }
+        pub const Opcodes = enum(u16) {
+            configure,
+        };
+        pub const Configure = struct {
+            serial: u32,
+
+            pub fn parse(payload: []const u32) Configure {
+                const serial = payload[0];
+                return .{
+                    .serial = serial,
+                };
+            }
+        };
+    };
+    pub const Errors = enum(u32) {
+        not_constructed,
+        already_constructed,
+        unconfigured_buffer,
+        invalid_serial,
+        invalid_size,
+        defunct_role_object,
+    };
+};
+
+pub const XDGToplevel = struct {
+    pub const Requests = struct {
+        pub const Destroy = extern struct {
+            header: RequestHeader = .{
+                .opcode = 0,
+                .msg_len = @sizeOf(Destroy),
+            },
+        };
+        pub const SetParent = extern struct {
+            header: RequestHeader = .{
+                .opcode = 1,
+                .msg_len = @sizeOf(SetParent),
+            },
+            parent: u32,
+        };
+        pub fn SetTitle(comptime TITLE_STR: []const u8) type {
+            const len = TITLE_STR.len + 1;
+            const padding_bytes = std.mem.alignForward(usize, len, 4) - len;
+            return extern struct {
+                const Self = @This();
+                header: RequestHeader = .{
+                    .opcode = 2,
+                    .msg_len = @sizeOf(Self),
+                },
+                title_len: u32 = len,
+                title: [TITLE_STR.len + padding_bytes]u8 =
+                    (TITLE_STR ++ .{0} ** padding_bytes).*,
+            };
+        }
+        pub fn SetAppId(comptime ID_STR: []const u8) type {
+            const len = ID_STR.len + 1;
+            const padding_bytes = std.mem.alignForward(usize, len, 4) - len;
+            return extern struct {
+                const Self = @This();
+                header: RequestHeader = .{
+                    .opcode = 3,
+                    .msg_len = @sizeOf(Self),
+                },
+                id_len: u32 = len,
+                id: [ID_STR.len + padding_bytes]u8 =
+                    (ID_STR ++ .{0} ** padding_bytes).*,
+            };
+        }
+        pub const ShowWindowMenu = extern struct {
+            header: RequestHeader = .{
+                .opcode = 4,
+                .msg_len = @sizeOf(SetParent),
+            },
+            seat: u32,
+            serial: u32,
+            x: i32,
+            y: i32,
+        };
+        pub const Move = extern struct {
+            header: RequestHeader = .{
+                .opcode = 5,
+                .msg_len = @sizeOf(Move),
+            },
+            seat: u32,
+            serial: u32,
+        };
+        pub const Resize = extern struct {
+            header: RequestHeader = .{
+                .opcode = 6,
+                .msg_len = @sizeOf(Resize),
+            },
+            seat: u32,
+            serial: u32,
+            edges: enum(u32) {
+                none,
+                top,
+                bottom,
+                left,
+                top_left,
+                bottom_left,
+                right,
+                top_right,
+                bottom_right,
+            },
+        };
+        pub const SetMaxSize = extern struct {
+            header: RequestHeader = .{
+                .opcode = 7,
+                .msg_len = @sizeOf(SetMaxSize),
+            },
+            width: i32,
+            height: i32,
+        };
+        pub const SetMinSize = extern struct {
+            header: RequestHeader = .{
+                .opcode = 8,
+                .msg_len = @sizeOf(SetMinSize),
+            },
+            width: i32,
+            height: i32,
+        };
+        pub const SetMaximized = extern struct {
+            header: RequestHeader = .{
+                .opcode = 9,
+                .msg_len = @sizeOf(SetMaximized),
+            },
+        };
+        pub const UnsetMaximized = extern struct {
+            header: RequestHeader = .{
+                .opcode = 10,
+                .msg_len = @sizeOf(UnsetMaximized),
+            },
+        };
+        pub const SetFullscreen = extern struct {
+            header: RequestHeader = .{
+                .opcode = 11,
+                .msg_len = @sizeOf(SetFullscreen),
+            },
+        };
+        pub const UnsetFullscreen = extern struct {
+            header: RequestHeader = .{
+                .opcode = 12,
+                .msg_len = @sizeOf(UnsetFullscreen),
+            },
+        };
+        pub const SetMinimized = extern struct {
+            header: RequestHeader = .{
+                .opcode = 13,
+                .msg_len = @sizeOf(SetMinimized),
+            },
+        };
+    };
+    pub const Events = struct {
+        pub fn parse(opcode: u16, payload: []const u32) Event {
+            const event_opcode: Opcodes = @enumFromInt(opcode);
+            switch (event_opcode) {
+                .configure => {
+                    const configure = Configure.parse(payload);
+                    return .{ .xdg_top_level_configure = configure };
+                },
+                .close => {
+                    const close = Close{};
+                    return .{ .xdg_top_level_close = close };
+                },
+                .configure_bounds => {
+                    const bounds = ConfigureBounds.parse(payload);
+                    return .{ .xdg_top_level_configure_bounds = bounds };
+                },
+                .wm_capabilities => {
+                    const capabilities = WmCapabilities.parse(payload);
+                    return .{ .xdg_top_level_wm_capabilities = capabilities };
+                },
+            }
+        }
+        pub const Opcodes = enum(u16) {
+            configure,
+            close,
+            configure_bounds,
+            wm_capabilities,
+        };
+        pub const Configure = struct {
+            width: i32,
+            height: i32,
+            states: []const State,
+
+            pub const State = enum(u32) {
+                maximized,
+                fullscreen,
+                resizing,
+                activated,
+                tiled_left,
+                tiled_right,
+                tiled_tops,
+                tiled_bottom,
+                suspended,
+                constrained_left,
+                constrained_right,
+                constrained_top,
+                constrained_bottom,
+            };
+
+            pub fn parse(payload: []const u32) Configure {
+                const width = payload[0];
+                const height = payload[1];
+                const len = payload[2] / @sizeOf(u32);
+                const states = payload[3..][0..len];
+                return .{
+                    .width = @bitCast(width),
+                    .height = @bitCast(height),
+                    .states = @ptrCast(states),
+                };
+            }
+        };
+        pub const Close = struct {};
+        pub const ConfigureBounds = struct {
+            width: i32,
+            height: i32,
+
+            pub fn parse(payload: []const u32) ConfigureBounds {
+                const width = payload[0];
+                const height = payload[2];
+                return .{
+                    .width = @bitCast(width),
+                    .height = @bitCast(height),
+                };
+            }
+        };
+        pub const WmCapabilities = struct {
+            array: []const Capabilities,
+
+            pub const Capabilities = enum(u32) {
+                window_menu,
+                maximize,
+                fullscreen,
+                minimize,
+            };
+
+            pub fn parse(payload: []const u32) WmCapabilities {
+                const len = payload[0] / @sizeOf(u32);
+                const array = payload[1..][0..len];
+                return .{
+                    .array = @ptrCast(array),
+                };
+            }
+        };
+    };
+    pub const Errors = enum(u32) {
+        invalid_resize_edge,
+        invalid_parent,
+        invalid_size,
     };
 };
 
@@ -426,8 +978,19 @@ pub const Event = union(enum) {
     display_delete_id: Display.Events.DeleteId,
     registry_global: Registry.Events.Global,
     registry_global_remove: Registry.Events.GlobalRemove,
-    shm_format: Shm.Events.Format,
     callback_done: Callback.Events.Done,
+    shm_format: Shm.Events.Format,
+    buffer_release: Buffer.Events.Release,
+    surface_enter: Surface.Events.Enter,
+    surface_leave: Surface.Events.Leave,
+    surface_preferred_buffer_scale: Surface.Events.PreferredBufferScale,
+    surface_preferred_buffer_transform: Surface.Events.PreferredBufferTransform,
+    xdg_wm_base_ping: XDGWmBase.Events.Ping,
+    xdg_surface_configure: XDGSurface.Events.Configure,
+    xdg_top_level_configure: XDGToplevel.Events.Configure,
+    xdg_top_level_close: XDGToplevel.Events.Close,
+    xdg_top_level_configure_bounds: XDGToplevel.Events.ConfigureBounds,
+    xdg_top_level_wm_capabilities: XDGToplevel.Events.WmCapabilities,
 };
 
 pub const Response = struct {
@@ -440,11 +1003,14 @@ pub const ObjectId = union(enum) {
     registry: u32,
     callback: u32,
     compositor: u32,
-    shm: u32,
     shm_pool: u32,
     shm_pool_buffer: u32,
-    xdg_wm_base: u32,
+    shm: u32,
+    buffer: u32,
     surface: u32,
+    xdg_wm_base: u32,
+    xdg_surface: u32,
+    xdg_top_level: u32,
 };
 
 pub fn open_socket(xdg_runtime_dir: ?[]const u8, wayland_display: ?[]const u8) !std.posix.fd_t {
@@ -566,27 +1132,45 @@ pub fn parse_response(
 
         for (object_ids) |oid| {
             switch (oid) {
-                .display => |d| if (d == header.id) {
+                .display => |id| if (id == header.id) {
                     const event = Display.Events.parse(header.opcode, payload);
                     try result.append(alloc, .{ .id = header.id, .event = event });
                 },
-                .registry => |r| if (r == header.id) {
+                .registry => |id| if (id == header.id) {
                     const event = Registry.Events.parse(header.opcode, payload);
                     try result.append(alloc, .{ .id = header.id, .event = event });
                 },
-                .callback => |s| if (s == header.id) {
+                .callback => |id| if (id == header.id) {
                     const event = Callback.Events.parse(header.opcode, payload);
                     try result.append(alloc, .{ .id = header.id, .event = event });
                 },
                 .compositor => {},
-                .shm => |s| if (s == header.id) {
+                .shm_pool => {},
+                .shm_pool_buffer => {},
+                .shm => |id| if (id == header.id) {
                     const event = Shm.Events.parse(header.opcode, payload);
                     try result.append(alloc, .{ .id = header.id, .event = event });
                 },
-                .shm_pool => {},
-                .shm_pool_buffer => {},
-                .xdg_wm_base => {},
-                .surface => {},
+                .buffer => |id| if (id == header.id) {
+                    const event = Buffer.Events.parse(header.opcode, payload);
+                    try result.append(alloc, .{ .id = header.id, .event = event });
+                },
+                .surface => |id| if (id == header.id) {
+                    const event = Surface.Events.parse(header.opcode, payload);
+                    try result.append(alloc, .{ .id = header.id, .event = event });
+                },
+                .xdg_wm_base => |id| if (id == header.id) {
+                    const event = XDGWmBase.Events.parse(header.opcode, payload);
+                    try result.append(alloc, .{ .id = header.id, .event = event });
+                },
+                .xdg_surface => |id| if (id == header.id) {
+                    const event = XDGSurface.Events.parse(header.opcode, payload);
+                    try result.append(alloc, .{ .id = header.id, .event = event });
+                },
+                .xdg_top_level => |id| if (id == header.id) {
+                    const event = XDGToplevel.Events.parse(header.opcode, payload);
+                    try result.append(alloc, .{ .id = header.id, .event = event });
+                },
             }
         }
     }
