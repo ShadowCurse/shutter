@@ -1,7 +1,5 @@
 const std = @import("std");
 
-const Allocator = std.mem.Allocator;
-
 pub const DISPLAY_ID = 1;
 pub const MAX_MESSAGE_SIZE = 4096;
 pub const MAX_MESSAGE_SIZE_U32 = MAX_MESSAGE_SIZE / @sizeOf(u32);
@@ -1004,7 +1002,6 @@ pub const ObjectId = union(enum) {
     callback: u32,
     compositor: u32,
     shm_pool: u32,
-    shm_pool_buffer: u32,
     shm: u32,
     buffer: u32,
     surface: u32,
@@ -1055,7 +1052,14 @@ pub fn send_request(socket_fd: std.posix.fd_t, request: []const u8, fd: ?std.pos
 
     var control_message_bytes: []const u8 = &.{};
     if (fd) |f| {
-        const control_message = cmsg(std.posix.fd_t){
+        const cmsg = extern struct {
+            len: u64 = @sizeOf(@This()) - @sizeOf(u32),
+            level: i32,
+            type: i32,
+            data: std.posix.fd_t,
+            _padding: u32 = 0,
+        };
+        const control_message: cmsg = .{
             .level = std.os.linux.SOL.SOCKET,
             .type = 0x01,
             .data = f,
@@ -1077,17 +1081,6 @@ pub fn send_request(socket_fd: std.posix.fd_t, request: []const u8, fd: ?std.pos
         &msg,
         std.os.linux.MSG.NOSIGNAL | std.os.linux.MSG.DONTWAIT,
     );
-}
-
-fn cmsg(comptime T: type) type {
-    const padding_size = (@sizeOf(T) + @sizeOf(c_long) - 1) & ~(@as(usize, @sizeOf(c_long)) - 1);
-    return extern struct {
-        len: c_ulong = @sizeOf(@This()) - padding_size,
-        level: c_int,
-        type: c_int,
-        data: T,
-        _padding: [padding_size]u8 align(1) = [_]u8{0} ** padding_size,
-    };
 }
 
 pub fn read_response(fd: std.posix.fd_t, buffer: []u32) ![]const u32 {
@@ -1115,64 +1108,63 @@ pub fn read_response(fd: std.posix.fd_t, buffer: []u32) ![]const u32 {
     return response;
 }
 
-pub fn parse_response(
-    alloc: Allocator,
-    object_ids: []const ObjectId,
+pub const ResponseParser = struct {
     response: []const u32,
-) !std.ArrayList(Response) {
-    var result: std.ArrayList(Response) = .empty;
-    var slice = response;
-    while (slice.len != 0) {
-        const header: *const RequestHeader = @ptrCast(slice.ptr);
-        slice = slice[@sizeOf(RequestHeader) / @sizeOf(u32) ..];
+    object_ids: []const ObjectId,
+
+    const Self = @This();
+    pub fn next(self: *Self) ?Response {
+        if (self.response.len == 0) return null;
+
+        const header: *const RequestHeader = @ptrCast(self.response.ptr);
+        self.response = self.response[@sizeOf(RequestHeader) / @sizeOf(u32) ..];
 
         const payload_len = (header.msg_len - @sizeOf(RequestHeader)) / @sizeOf(u32);
-        const payload = slice[0..payload_len];
-        slice = slice[payload_len..];
+        const payload = self.response[0..payload_len];
+        self.response = self.response[payload_len..];
 
-        for (object_ids) |oid| {
+        for (self.object_ids) |oid| {
             switch (oid) {
                 .display => |id| if (id == header.id) {
                     const event = Display.Events.parse(header.opcode, payload);
-                    try result.append(alloc, .{ .id = header.id, .event = event });
+                    return .{ .id = header.id, .event = event };
                 },
                 .registry => |id| if (id == header.id) {
                     const event = Registry.Events.parse(header.opcode, payload);
-                    try result.append(alloc, .{ .id = header.id, .event = event });
+                    return .{ .id = header.id, .event = event };
                 },
                 .callback => |id| if (id == header.id) {
                     const event = Callback.Events.parse(header.opcode, payload);
-                    try result.append(alloc, .{ .id = header.id, .event = event });
+                    return .{ .id = header.id, .event = event };
                 },
                 .compositor => {},
                 .shm_pool => {},
-                .shm_pool_buffer => {},
                 .shm => |id| if (id == header.id) {
                     const event = Shm.Events.parse(header.opcode, payload);
-                    try result.append(alloc, .{ .id = header.id, .event = event });
+                    return .{ .id = header.id, .event = event };
                 },
                 .buffer => |id| if (id == header.id) {
                     const event = Buffer.Events.parse(header.opcode, payload);
-                    try result.append(alloc, .{ .id = header.id, .event = event });
+                    return .{ .id = header.id, .event = event };
                 },
                 .surface => |id| if (id == header.id) {
                     const event = Surface.Events.parse(header.opcode, payload);
-                    try result.append(alloc, .{ .id = header.id, .event = event });
+                    return .{ .id = header.id, .event = event };
                 },
                 .xdg_wm_base => |id| if (id == header.id) {
                     const event = XDGWmBase.Events.parse(header.opcode, payload);
-                    try result.append(alloc, .{ .id = header.id, .event = event });
+                    return .{ .id = header.id, .event = event };
                 },
                 .xdg_surface => |id| if (id == header.id) {
                     const event = XDGSurface.Events.parse(header.opcode, payload);
-                    try result.append(alloc, .{ .id = header.id, .event = event });
+                    return .{ .id = header.id, .event = event };
                 },
                 .xdg_top_level => |id| if (id == header.id) {
                     const event = XDGToplevel.Events.parse(header.opcode, payload);
-                    try result.append(alloc, .{ .id = header.id, .event = event });
+                    return .{ .id = header.id, .event = event };
                 },
             }
         }
+        return null;
     }
-    return result;
-}
+};
