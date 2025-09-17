@@ -16,17 +16,25 @@ pub const Display = struct {
             header: RequestHeader = .{
                 .id = DISPLAY_ID,
                 .opcode = 0,
-                .msg_len = @sizeOf(Sync),
+                .msg_len = @sizeOf(@This()),
             },
             callback: u32,
+            pub fn init(callback: u32) @This() {
+                const this: @This() = .{ .callback = callback };
+                return this;
+            }
         };
         pub const GetRegistry = extern struct {
             header: RequestHeader = .{
                 .id = DISPLAY_ID,
                 .opcode = 1,
-                .msg_len = @sizeOf(GetRegistry),
+                .msg_len = @sizeOf(@This()),
             },
             registry: u32,
+            pub fn init(registry: u32) @This() {
+                const this: @This() = .{ .registry = registry };
+                return this;
+            }
         };
     };
     pub const Events = struct {
@@ -93,10 +101,9 @@ pub const Registry = struct {
             const len = INTERFACE_STR.len + 1;
             const padding_bytes = std.mem.alignForward(usize, len, 4) - len;
             return extern struct {
-                const Self = @This();
                 header: RequestHeader = .{
                     .opcode = 0,
-                    .msg_len = @sizeOf(Self),
+                    .msg_len = @sizeOf(@This()),
                 },
                 name: u32,
                 interface_len: u32 = len,
@@ -104,6 +111,16 @@ pub const Registry = struct {
                     (INTERFACE_STR ++ .{0} ** padding_bytes).*,
                 version: u32,
                 id: u32,
+
+                pub fn init(target_id: u32, name: u32, version: u32, id: u32) @This() {
+                    var this: @This() = .{
+                        .name = name,
+                        .version = version,
+                        .id = id,
+                    };
+                    this.header.id = target_id;
+                    return this;
+                }
             };
         }
     };
@@ -191,16 +208,26 @@ pub const Compositor = struct {
         pub const CreateSurface = extern struct {
             header: RequestHeader = .{
                 .opcode = 0,
-                .msg_len = @sizeOf(CreateSurface),
+                .msg_len = @sizeOf(@This()),
             },
             id: u32,
+            pub fn init(target_id: u32, id: u32) @This() {
+                var this: @This() = .{ .id = id };
+                this.header.id = target_id;
+                return this;
+            }
         };
         pub const CreateRegion = extern struct {
             header: RequestHeader = .{
                 .opcode = 1,
-                .msg_len = @sizeOf(CreateRegion),
+                .msg_len = @sizeOf(@This()),
             },
             id: u32,
+            pub fn init(target_id: u32, id: u32) @This() {
+                var this: @This() = .{ .id = id };
+                this.header.id = target_id;
+                return this;
+            }
         };
     };
 };
@@ -208,29 +235,50 @@ pub const Compositor = struct {
 pub const ShmPool = struct {
     pub const Requests = struct {
         pub const CreateBuffer = extern struct {
-            header: RequestHeader = .{
-                .opcode = 0,
-                .msg_len = @sizeOf(CreateBuffer),
-            },
+            header: RequestHeader = .{ .opcode = 0, .msg_len = @sizeOf(@This()) },
             id: u32,
             offset: i32,
             width: i32,
             height: i32,
             stride: i32,
             format: Shm.Events.Format.Values,
+            pub fn init(
+                target_id: u32,
+                id: u32,
+                offset: i32,
+                width: i32,
+                height: i32,
+                stride: i32,
+                format: Shm.Events.Format.Values,
+            ) @This() {
+                var this: @This() = .{
+                    .id = id,
+                    .offset = offset,
+                    .width = width,
+                    .height = height,
+                    .stride = stride,
+                    .format = format,
+                };
+                this.header.id = target_id;
+                return this;
+            }
         };
         pub const Destroy = extern struct {
-            header: RequestHeader = .{
-                .opcode = 1,
-                .msg_len = @sizeOf(Destroy),
-            },
+            header: RequestHeader = .{ .opcode = 1, .msg_len = @sizeOf(@This()) },
+            pub fn init(target_id: u32) @This() {
+                var this: @This() = .{};
+                this.header.id = target_id;
+                return this;
+            }
         };
         pub const Resize = extern struct {
-            header: RequestHeader = .{
-                .opcode = 2,
-                .msg_len = @sizeOf(Resize),
-            },
+            header: RequestHeader = .{ .opcode = 2, .msg_len = @sizeOf(@This()) },
             size: i32,
+            pub fn init(target_id: u32, size: i32) @This() {
+                var this: @This() = .{ .size = size };
+                this.header.id = target_id;
+                return this;
+            }
         };
     };
 };
@@ -238,18 +286,22 @@ pub const ShmPool = struct {
 pub const Shm = struct {
     pub const Requests = struct {
         pub const CreatePool = extern struct {
-            header: RequestHeader = .{
-                .opcode = 0,
-                .msg_len = @sizeOf(CreatePool),
-            },
+            header: RequestHeader = .{ .opcode = 0, .msg_len = @sizeOf(@This()) },
             id: u32,
             size: i32,
+            pub fn init(target_id: u32, id: u32, size: i32) @This() {
+                var this: @This() = .{ .id = id, .size = size };
+                this.header.id = target_id;
+                return this;
+            }
         };
         pub const Release = extern struct {
-            header: RequestHeader = .{
-                .opcode = 1,
-                .msg_len = @sizeOf(Release),
-            },
+            header: RequestHeader = .{ .opcode = 1, .msg_len = @sizeOf(@This()) },
+            pub fn init(target_id: u32) @This() {
+                var this: @This() = .{};
+                this.header.id = target_id;
+                return this;
+            }
         };
     };
     pub const Events = struct {
@@ -412,10 +464,12 @@ pub const Shm = struct {
 pub const Buffer = struct {
     pub const Requests = struct {
         pub const Destroy = extern struct {
-            header: RequestHeader = .{
-                .opcode = 0,
-                .msg_len = @sizeOf(Destroy),
-            },
+            header: RequestHeader = .{ .opcode = 0, .msg_len = @sizeOf(@This()) },
+            pub fn init(target_id: u32) @This() {
+                var this: @This() = .{};
+                this.header.id = target_id;
+                return this;
+            }
         };
     };
 
@@ -439,88 +493,113 @@ pub const Buffer = struct {
 pub const Surface = struct {
     pub const Requests = struct {
         pub const Destroy = extern struct {
-            header: RequestHeader = .{
-                .opcode = 0,
-                .msg_len = @sizeOf(Destroy),
-            },
+            header: RequestHeader = .{ .opcode = 0, .msg_len = @sizeOf(@This()) },
+            pub fn init(target_id: u32) @This() {
+                var this: @This() = .{};
+                this.header.id = target_id;
+                return this;
+            }
         };
         pub const Attach = extern struct {
-            header: RequestHeader = .{
-                .opcode = 1,
-                .msg_len = @sizeOf(Attach),
-            },
+            header: RequestHeader = .{ .opcode = 1, .msg_len = @sizeOf(@This()) },
             id: u32,
             x: i32,
             y: i32,
+            pub fn init(target_id: u32, id: u32, x: i32, y: i32) @This() {
+                var this: @This() = .{ .id = id, .x = x, .y = y };
+                this.header.id = target_id;
+                return this;
+            }
         };
         pub const Damage = extern struct {
-            header: RequestHeader = .{
-                .opcode = 2,
-                .msg_len = @sizeOf(Damage),
-            },
+            header: RequestHeader = .{ .opcode = 2, .msg_len = @sizeOf(@This()) },
             x: i32,
             y: i32,
             width: i32,
             height: i32,
+            pub fn init(target_id: u32, x: i32, y: i32, width: i32, height: i32) @This() {
+                var this: @This() = .{ .x = x, .y = y, .width = width, .height = height };
+                this.header.id = target_id;
+                return this;
+            }
         };
         pub const Frame = extern struct {
-            header: RequestHeader = .{
-                .opcode = 3,
-                .msg_len = @sizeOf(Frame),
-            },
+            header: RequestHeader = .{ .opcode = 3, .msg_len = @sizeOf(@This()) },
             callback: u32,
+            pub fn init(target_id: u32, callback: u32) @This() {
+                var this: @This() = .{ .callback = callback };
+                this.header.id = target_id;
+                return this;
+            }
         };
         pub const SetOpaqueRegion = extern struct {
-            header: RequestHeader = .{
-                .opcode = 4,
-                .msg_len = @sizeOf(SetOpaqueRegion),
-            },
+            header: RequestHeader = .{ .opcode = 4, .msg_len = @sizeOf(@This()) },
             region: u32,
+            pub fn init(target_id: u32, region: u32) @This() {
+                var this: @This() = .{ .region = region };
+                this.header.id = target_id;
+                return this;
+            }
         };
         pub const SetInputRegion = extern struct {
-            header: RequestHeader = .{
-                .opcode = 5,
-                .msg_len = @sizeOf(SetInputRegion),
-            },
+            header: RequestHeader = .{ .opcode = 5, .msg_len = @sizeOf(@This()) },
             region: u32,
+            pub fn init(target_id: u32, region: u32) @This() {
+                var this: @This() = .{ .region = region };
+                this.header.id = target_id;
+                return this;
+            }
         };
         pub const Commit = extern struct {
-            header: RequestHeader = .{
-                .opcode = 6,
-                .msg_len = @sizeOf(Commit),
-            },
+            header: RequestHeader = .{ .opcode = 6, .msg_len = @sizeOf(@This()) },
+            pub fn init(target_id: u32) @This() {
+                var this: @This() = .{};
+                this.header.id = target_id;
+                return this;
+            }
         };
         pub const SetBufferTransform = extern struct {
-            header: RequestHeader = .{
-                .opcode = 7,
-                .msg_len = @sizeOf(SetBufferTransform),
-            },
+            header: RequestHeader = .{ .opcode = 7, .msg_len = @sizeOf(@This()) },
             transform: u32,
+            pub fn init(target_id: u32, transform: u32) @This() {
+                var this: @This() = .{ .transform = transform };
+                this.header.id = target_id;
+                return this;
+            }
         };
         pub const SetBufferScale = extern struct {
-            header: RequestHeader = .{
-                .opcode = 8,
-                .msg_len = @sizeOf(SetBufferScale),
-            },
+            header: RequestHeader = .{ .opcode = 8, .msg_len = @sizeOf(@This()) },
             scale: i32,
+            pub fn init(target_id: u32, scale: i32) @This() {
+                var this: @This() = .{ .scale = scale };
+                this.header.id = target_id;
+                return this;
+            }
         };
         pub const DamageBuffer = extern struct {
-            header: RequestHeader = .{
-                .opcode = 9,
-                .msg_len = @sizeOf(DamageBuffer),
-            },
+            header: RequestHeader = .{ .opcode = 9, .msg_len = @sizeOf(@This()) },
             x: i32,
             y: i32,
             width: i32,
             height: i32,
+            pub fn init(target_id: u32, x: i32, y: i32, width: i32, height: i32) @This() {
+                var this: @This() = .{ .x = x, .y = y, .width = width, .height = height };
+                this.header.id = target_id;
+                return this;
+            }
         };
         pub const Offset = extern struct {
             header: RequestHeader = .{
                 .opcode = 10,
-                .msg_len = @sizeOf(Offset),
+                .msg_len = @sizeOf(@This()),
             },
             x: i32,
             y: i32,
+            pub fn init(target_id: u32, x: i32, y: i32) @This() {
+                var this: @This() = .{ .x = x, .y = y };
+                this.header.id = target_id;
+                return this;
+            }
         };
     };
     pub const Events = struct {
@@ -604,32 +683,40 @@ pub const Surface = struct {
 pub const XDGWmBase = struct {
     pub const Requests = struct {
         pub const Destroy = extern struct {
-            header: RequestHeader = .{
-                .opcode = 0,
-                .msg_len = @sizeOf(Destroy),
-            },
+            header: RequestHeader = .{ .opcode = 0, .msg_len = @sizeOf(@This()) },
+            pub fn init(target_id: u32) @This() {
+                var this: @This() = .{};
+                this.header.id = target_id;
+                return this;
+            }
         };
         pub const CreatePositioner = extern struct {
-            header: RequestHeader = .{
-                .opcode = 1,
-                .msg_len = @sizeOf(CreatePositioner),
-            },
+            header: RequestHeader = .{ .opcode = 1, .msg_len = @sizeOf(@This()) },
             id: u32,
+            pub fn init(target_id: u32, id: u32) @This() {
+                var this: @This() = .{ .id = id };
+                this.header.id = target_id;
+                return this;
+            }
         };
         pub const GetXDGSurface = extern struct {
-            header: RequestHeader = .{
-                .opcode = 2,
-                .msg_len = @sizeOf(GetXDGSurface),
-            },
+            header: RequestHeader = .{ .opcode = 2, .msg_len = @sizeOf(@This()) },
             id: u32,
             surface: u32,
+            pub fn init(target_id: u32, id: u32, surface: u32) @This() {
+                var this: @This() = .{ .id = id, .surface = surface };
+                this.header.id = target_id;
+                return this;
+            }
         };
         pub const Pong = extern struct {
-            header: RequestHeader = .{
-                .opcode = 3,
-                .msg_len = @sizeOf(Pong),
-            },
+            header: RequestHeader = .{ .opcode = 3, .msg_len = @sizeOf(@This()) },
             serial: u32,
+            pub fn init(target_id: u32, serial: u32) @This() {
+                var this: @This() = .{ .serial = serial };
+                this.header.id = target_id;
+                return this;
+            }
         };
     };
     pub const Events = struct {
@@ -670,43 +757,53 @@ pub const XDGWmBase = struct {
 pub const XDGSurface = struct {
     pub const Requests = struct {
         pub const Destroy = extern struct {
-            header: RequestHeader = .{
-                .opcode = 0,
-                .msg_len = @sizeOf(Destroy),
-            },
+            header: RequestHeader = .{ .opcode = 0, .msg_len = @sizeOf(@This()) },
+            pub fn init(target_id: u32) @This() {
+                var this: @This() = .{};
+                this.header.id = target_id;
+                return this;
+            }
         };
         pub const GetToplevel = extern struct {
-            header: RequestHeader = .{
-                .opcode = 1,
-                .msg_len = @sizeOf(GetToplevel),
-            },
+            header: RequestHeader = .{ .opcode = 1, .msg_len = @sizeOf(@This()) },
             id: u32,
+            pub fn init(target_id: u32, id: u32) @This() {
+                var this: @This() = .{ .id = id };
+                this.header.id = target_id;
+                return this;
+            }
         };
         pub const GetPopup = extern struct {
-            header: RequestHeader = .{
-                .opcode = 2,
-                .msg_len = @sizeOf(GetPopup),
-            },
+            header: RequestHeader = .{ .opcode = 2, .msg_len = @sizeOf(@This()) },
             id: u32,
             parent: u32,
             positioner: u32,
+            pub fn init(target_id: u32, id: u32, parent: u32, positioner: u32) @This() {
+                var this: @This() = .{ .id = id, .parent = parent, .positioner = positioner };
+                this.header.id = target_id;
+                return this;
+            }
         };
         pub const SetWindowGeometry = extern struct {
-            header: RequestHeader = .{
-                .opcode = 3,
-                .msg_len = @sizeOf(SetWindowGeometry),
-            },
+            header: RequestHeader = .{ .opcode = 3, .msg_len = @sizeOf(@This()) },
             x: i32,
             y: i32,
             width: i32,
             height: i32,
+            pub fn init(target_id: u32, x: i32, y: i32, width: i32, height: i32) @This() {
+                var this: @This() = .{ .x = x, .y = y, .width = width, .height = height };
+                this.header.id = target_id;
+                return this;
+            }
         };
         pub const AckConfigure = extern struct {
-            header: RequestHeader = .{
-                .opcode = 4,
-                .msg_len = @sizeOf(AckConfigure),
-            },
+            header: RequestHeader = .{ .opcode = 4, .msg_len = @sizeOf(@This()) },
             serial: u32,
+            pub fn init(target_id: u32, serial: u32) @This() {
+                var this: @This() = .{ .serial = serial };
+                this.header.id = target_id;
+                return this;
+            }
         };
     };
     pub const Events = struct {
@@ -746,72 +843,81 @@ pub const XDGSurface = struct {
 pub const XDGToplevel = struct {
     pub const Requests = struct {
         pub const Destroy = extern struct {
-            header: RequestHeader = .{
-                .opcode = 0,
-                .msg_len = @sizeOf(Destroy),
-            },
+            header: RequestHeader = .{ .opcode = 0, .msg_len = @sizeOf(@This()) },
+            pub fn init(target_id: u32) @This() {
+                var this: @This() = .{};
+                this.header.id = target_id;
+                return this;
+            }
         };
         pub const SetParent = extern struct {
-            header: RequestHeader = .{
-                .opcode = 1,
-                .msg_len = @sizeOf(SetParent),
-            },
+            header: RequestHeader = .{ .opcode = 1, .msg_len = @sizeOf(@This()) },
             parent: u32,
+            pub fn init(target_id: u32, parent: u32) @This() {
+                var this: @This() = .{ .parent = parent };
+                this.header.id = target_id;
+                return this;
+            }
         };
         pub fn SetTitle(comptime TITLE_STR: []const u8) type {
             const len = TITLE_STR.len + 1;
             const padding_bytes = std.mem.alignForward(usize, len, 4) - len;
             return extern struct {
-                const Self = @This();
-                header: RequestHeader = .{
-                    .opcode = 2,
-                    .msg_len = @sizeOf(Self),
-                },
+                header: RequestHeader = .{ .opcode = 2, .msg_len = @sizeOf(@This()) },
                 title_len: u32 = len,
                 title: [TITLE_STR.len + padding_bytes]u8 =
                     (TITLE_STR ++ .{0} ** padding_bytes).*,
+                pub fn init(target_id: u32) @This() {
+                    var this: @This() = .{};
+                    this.header.id = target_id;
+                    return this;
+                }
             };
         }
         pub fn SetAppId(comptime ID_STR: []const u8) type {
             const len = ID_STR.len + 1;
             const padding_bytes = std.mem.alignForward(usize, len, 4) - len;
             return extern struct {
-                const Self = @This();
-                header: RequestHeader = .{
-                    .opcode = 3,
-                    .msg_len = @sizeOf(Self),
-                },
+                header: RequestHeader = .{ .opcode = 3, .msg_len = @sizeOf(@This()) },
                 id_len: u32 = len,
                 id: [ID_STR.len + padding_bytes]u8 =
                     (ID_STR ++ .{0} ** padding_bytes).*,
+                pub fn init(target_id: u32) @This() {
+                    var this: @This() = .{};
+                    this.header.id = target_id;
+                    return this;
+                }
             };
         }
         pub const ShowWindowMenu = extern struct {
-            header: RequestHeader = .{
-                .opcode = 4,
-                .msg_len = @sizeOf(SetParent),
-            },
+            header: RequestHeader = .{ .opcode = 4, .msg_len = @sizeOf(@This()) },
             seat: u32,
             serial: u32,
             x: i32,
             y: i32,
+            pub fn init(target_id: u32, seat: u32, serial: u32, x: i32, y: i32) @This() {
+                var this: @This() = .{ .seat = seat, .serial = serial, .x = x, .y = y };
+                this.header.id = target_id;
+                return this;
+            }
         };
         pub const Move = extern struct {
-            header: RequestHeader = .{
-                .opcode = 5,
-                .msg_len = @sizeOf(Move),
-            },
+            header: RequestHeader = .{ .opcode = 5, .msg_len = @sizeOf(@This()) },
             seat: u32,
             serial: u32,
+            pub fn init(target_id: u32, seat: u32, serial: u32) @This() {
+                var this: @This() = .{ .seat = seat, .serial = serial };
+                this.header.id = target_id;
+                return this;
+            }
         };
         pub const Resize = extern struct {
-            header: RequestHeader = .{
-                .opcode = 6,
-                .msg_len = @sizeOf(Resize),
-            },
+            header: RequestHeader = .{ .opcode = 6, .msg_len = @sizeOf(@This()) },
             seat: u32,
             serial: u32,
-            edges: enum(u32) {
+            edges: Edges,
+
+            pub const Edges = enum(u32) {
                 none,
                 top,
                 bottom,
@@ -821,53 +927,73 @@ pub const XDGToplevel = struct {
                 right,
                 top_right,
                 bottom_right,
-            },
+            };
+
+            pub fn init(target_id: u32, seat: u32, serial: u32, edges: Edges) @This() {
+                var this: @This() = .{ .seat = seat, .serial = serial, .edges = edges };
+                this.header.id = target_id;
+                return this;
+            }
         };
         pub const SetMaxSize = extern struct {
-            header: RequestHeader = .{
-                .opcode = 7,
-                .msg_len = @sizeOf(SetMaxSize),
-            },
+            header: RequestHeader = .{ .opcode = 7, .msg_len = @sizeOf(@This()) },
             width: i32,
             height: i32,
+            pub fn init(target_id: u32, width: i32, height: i32) @This() {
+                var this: @This() = .{ .width = width, .height = height };
+                this.header.id = target_id;
+                return this;
+            }
         };
         pub const SetMinSize = extern struct {
-            header: RequestHeader = .{
-                .opcode = 8,
-                .msg_len = @sizeOf(SetMinSize),
-            },
+            header: RequestHeader = .{ .opcode = 8, .msg_len = @sizeOf(@This()) },
             width: i32,
             height: i32,
+            pub fn init(target_id: u32, width: i32, height: i32) @This() {
+                var this: @This() = .{ .width = width, .height = height };
+                this.header.id = target_id;
+                return this;
+            }
         };
         pub const SetMaximized = extern struct {
-            header: RequestHeader = .{
-                .opcode = 9,
-                .msg_len = @sizeOf(SetMaximized),
-            },
+            header: RequestHeader = .{ .opcode = 9, .msg_len = @sizeOf(@This()) },
+            pub fn init(target_id: u32) @This() {
+                var this: @This() = .{};
+                this.header.id = target_id;
+                return this;
+            }
         };
         pub const UnsetMaximized = extern struct {
-            header: RequestHeader = .{
-                .opcode = 10,
-                .msg_len = @sizeOf(UnsetMaximized),
-            },
+            header: RequestHeader = .{ .opcode = 10, .msg_len = @sizeOf(@This()) },
+            pub fn init(target_id: u32) @This() {
+                var this: @This() = .{};
+                this.header.id = target_id;
+                return this;
+            }
         };
         pub const SetFullscreen = extern struct {
-            header: RequestHeader = .{
-                .opcode = 11,
-                .msg_len = @sizeOf(SetFullscreen),
-            },
+            header: RequestHeader = .{ .opcode = 11, .msg_len = @sizeOf(@This()) },
+            pub fn init(target_id: u32) @This() {
+                var this: @This() = .{};
+                this.header.id = target_id;
+                return this;
+            }
         };
         pub const UnsetFullscreen = extern struct {
-            header: RequestHeader = .{
-                .opcode = 12,
-                .msg_len = @sizeOf(UnsetFullscreen),
-            },
+            header: RequestHeader = .{ .opcode = 12, .msg_len = @sizeOf(@This()) },
+            pub fn init(target_id: u32) @This() {
+                var this: @This() = .{};
+                this.header.id = target_id;
+                return this;
+            }
         };
         pub const SetMinimized = extern struct {
-            header: RequestHeader = .{
-                .opcode = 13,
-                .msg_len = @sizeOf(SetMinimized),
-            },
+            header: RequestHeader = .{ .opcode = 13, .msg_len = @sizeOf(@This()) },
+            pub fn init(target_id: u32) @This() {
+                var this: @This() = .{};
+                this.header.id = target_id;
+                return this;
+            }
         };
     };
     pub const Events = struct {
@@ -1100,7 +1226,7 @@ pub fn read_response(fd: std.posix.fd_t, buffer: []u32) ![]const u32 {
     };
     const len = std.os.linux.recvmsg(fd, &msg, 0);
     if (std.posix.errno(len) == .AGAIN) return &.{};
-
+    if (std.posix.errno(len) != .SUCCESS) return error.RecvMsgError;
     if (len % 4 != 0) return error.PartialResponse;
 
     const response_bytes = buffer_bytes[0..len];
