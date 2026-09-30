@@ -177,7 +177,7 @@ pub fn trace(
     output("[{s}:{}:TRACE][{d}] " ++ format ++ "\n", t);
 }
 
-const Output = struct {
+pub const Output = struct {
   fd: std.os.linux.fd_t,
   writer: std.Io.Writer,
 
