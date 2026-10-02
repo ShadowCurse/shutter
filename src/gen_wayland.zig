@@ -12,6 +12,7 @@ const IN_PATHS = [_][*:0]const u8{
   "thirdparty/presentation-time.xml",
   "thirdparty/linux-dmabuf-v1.xml",
   "thirdparty/tablet-v2.xml",
+  "thirdparty/linux-drm-syncobj-v1.xml",
 };
 const OUT_PATH = "src/wayland.zig";
 

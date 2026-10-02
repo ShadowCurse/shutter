@@ -61,6 +61,9 @@ pub const Interface = enum(u8) {
   zwp_tablet_pad_group_v2,
   zwp_tablet_pad_v2,
   zwp_tablet_pad_dial_v2,
+  wp_linux_drm_syncobj_manager_v1,
+  wp_linux_drm_syncobj_timeline_v1,
+  wp_linux_drm_syncobj_surface_v1,
 };
 
 // Protocol: wayland
@@ -4621,6 +4624,142 @@ pub const zwp_tablet_pad_dial_v2 = struct {
   }
 };
 
+// Protocol: linux_drm_syncobj_v1
+
+/// global for providing explicit synchronization
+pub const wp_linux_drm_syncobj_manager_v1 = struct {
+  pub const NAME = "wp_linux_drm_syncobj_manager_v1";
+  pub const VERSION = 1;
+  pub const INTERFACE: Interface = .wp_linux_drm_syncobj_manager_v1;
+  pub const Id = enum(u32) { none = 0, _ };
+
+  pub const Error = enum(u32) {
+    /// the surface already has a synchronization object associated
+    surface_exists = 0,
+    /// the timeline object could not be imported
+    invalid_timeline = 1,
+    _,
+  };
+
+  /// destroy explicit synchronization factory object
+  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+    const message_size  = 8;
+    const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
+    conn.message_end(message_start);
+    conn.object_destroy(@intFromEnum(self));
+  }
+
+  /// extend surface interface for explicit synchronization
+  pub fn get_surface(
+    conn: *wire.Connection,
+    self: Id,
+    surface: wl_surface.Id,
+  ) !wp_linux_drm_syncobj_surface_v1.Id {
+    const id            = try object_new(conn, wp_linux_drm_syncobj_surface_v1);
+    const message_size  = 16;
+    const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
+    conn.put_uint(@intFromEnum(id));
+    conn.put_uint(@intFromEnum(surface));
+    conn.message_end(message_start);
+    return id;
+  }
+
+  /// import a DRM syncobj timeline
+  pub fn import_timeline(
+    conn: *wire.Connection,
+    self: Id,
+    fd: std.os.linux.fd_t,
+  ) !wp_linux_drm_syncobj_timeline_v1.Id {
+    const id            = try object_new(conn, wp_linux_drm_syncobj_timeline_v1);
+    const message_size  = 12;
+    const message_start = try conn.message_begin(@intFromEnum(self), 2, message_size, 1);
+    conn.put_uint(@intFromEnum(id));
+    conn.put_fd(fd);
+    conn.message_end(message_start);
+    return id;
+  }
+};
+
+/// synchronization object timeline
+pub const wp_linux_drm_syncobj_timeline_v1 = struct {
+  pub const NAME = "wp_linux_drm_syncobj_timeline_v1";
+  pub const VERSION = 1;
+  pub const INTERFACE: Interface = .wp_linux_drm_syncobj_timeline_v1;
+  pub const Id = enum(u32) { none = 0, _ };
+
+  /// destroy the timeline
+  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+    const message_size  = 8;
+    const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
+    conn.message_end(message_start);
+    conn.object_destroy(@intFromEnum(self));
+  }
+};
+
+/// per-surface explicit synchronization
+pub const wp_linux_drm_syncobj_surface_v1 = struct {
+  pub const NAME = "wp_linux_drm_syncobj_surface_v1";
+  pub const VERSION = 1;
+  pub const INTERFACE: Interface = .wp_linux_drm_syncobj_surface_v1;
+  pub const Id = enum(u32) { none = 0, _ };
+
+  pub const Error = enum(u32) {
+    /// the associated wl_surface was destroyed
+    no_surface = 1,
+    /// the buffer does not support explicit synchronization
+    unsupported_buffer = 2,
+    /// no buffer was attached
+    no_buffer = 3,
+    /// no acquire timeline point was set
+    no_acquire_point = 4,
+    /// no release timeline point was set
+    no_release_point = 5,
+    /// acquire and release timeline points are in conflict
+    conflicting_points = 6,
+    _,
+  };
+
+  /// destroy the surface synchronization object
+  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+    const message_size  = 8;
+    const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
+    conn.message_end(message_start);
+    conn.object_destroy(@intFromEnum(self));
+  }
+
+  /// set the acquire timeline point
+  pub fn set_acquire_point(
+    conn: *wire.Connection,
+    self: Id,
+    timeline: wp_linux_drm_syncobj_timeline_v1.Id,
+    point_hi: u32,
+    point_lo: u32,
+  ) !void {
+    const message_size  = 20;
+    const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
+    conn.put_uint(@intFromEnum(timeline));
+    conn.put_uint(point_hi);
+    conn.put_uint(point_lo);
+    conn.message_end(message_start);
+  }
+
+  /// set the release timeline point
+  pub fn set_release_point(
+    conn: *wire.Connection,
+    self: Id,
+    timeline: wp_linux_drm_syncobj_timeline_v1.Id,
+    point_hi: u32,
+    point_lo: u32,
+  ) !void {
+    const message_size  = 20;
+    const message_start = try conn.message_begin(@intFromEnum(self), 2, message_size, 0);
+    conn.put_uint(@intFromEnum(timeline));
+    conn.put_uint(point_hi);
+    conn.put_uint(point_lo);
+    conn.message_end(message_start);
+  }
+};
+
 pub const Message = struct {
   id: u32,
   event: Event,
@@ -4809,6 +4948,9 @@ pub fn event_next(conn: *wire.Connection) !?Message {
       .wp_viewporter,
       .wp_viewport,
       .zwp_tablet_manager_v2,
+      .wp_linux_drm_syncobj_manager_v1,
+      .wp_linux_drm_syncobj_timeline_v1,
+      .wp_linux_drm_syncobj_surface_v1,
       => {},
     }
   }
@@ -4861,6 +5003,9 @@ test {
   std.testing.refAllDecls(zwp_tablet_pad_group_v2);
   std.testing.refAllDecls(zwp_tablet_pad_v2);
   std.testing.refAllDecls(zwp_tablet_pad_dial_v2);
+  std.testing.refAllDecls(wp_linux_drm_syncobj_manager_v1);
+  std.testing.refAllDecls(wp_linux_drm_syncobj_timeline_v1);
+  std.testing.refAllDecls(wp_linux_drm_syncobj_surface_v1);
 }
 
 test "requests and events" {
