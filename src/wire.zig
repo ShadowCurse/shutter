@@ -1,5 +1,4 @@
 const std    = @import("std");
-const os     = @import("os.zig");
 const assert = std.debug.assert;
 
 const fd_t = std.os.linux.fd_t;
@@ -34,6 +33,15 @@ comptime {
   assert(DISPLAY_ID < CLIENT_OBJECTS_MAX);
   assert(FDS_MAX * @sizeOf(fd_t) % 8 == 0);
   assert(CMSG_HEADER_SIZE == 16);
+}
+
+// Converts a raw syscall return value into a result or an error.
+fn syscall_result(result: usize) !usize {
+  return switch (std.os.linux.errno(result)) {
+    .SUCCESS => result,
+    .AGAIN   => error.WouldBlock,
+    else     => |e| std.posix.unexpectedErrno(e),
+  };
 }
 
 /// Signed 24.8 fixed point number.
@@ -148,12 +156,12 @@ pub const Connection = struct {
     const wd = wayland_display orelse environ.getPosix("WAYLAND_DISPLAY") orelse "wayland-0";
     if (wd.len == 0) return error.InvalidWaylandDisplay;
 
-    const socket_fd = try os.socket(
+    const socket_fd: fd_t = @intCast(try syscall_result(std.os.linux.socket(
       std.os.linux.PF.UNIX,
       std.os.linux.SOCK.STREAM | std.os.linux.SOCK.NONBLOCK | std.os.linux.SOCK.CLOEXEC,
       0,
-    );
-    errdefer os.close(socket_fd);
+    )));
+    errdefer _ = std.os.linux.close(socket_fd);
 
     var addr: std.posix.sockaddr.un = .{
       .family = std.os.linux.PF.UNIX,
@@ -164,11 +172,11 @@ pub const Connection = struct {
     else
       try std.fmt.bufPrint(&addr.path, "{s}/{s}", .{ xrd, wd });
 
-    try os.connect(
+    _ = try syscall_result(std.os.linux.connect(
       socket_fd,
       @ptrCast(&addr),
       @offsetOf(std.posix.sockaddr, "data") + @as(u32, @intCast(path.len)),
-    );
+    ));
     conn.init(socket_fd);
   }
 
@@ -298,8 +306,9 @@ pub const Connection = struct {
     }
 
     var control: [CMSG_HEADER_SIZE + FDS_MAX * @sizeOf(fd_t)]u8 align(8) = undefined;
-    const fds_size                                                       = conn.send_fds_count * @sizeOf(fd_t);
-    const header: *CmsgHeader                                            = @ptrCast(&control);
+
+    const fds_size            = conn.send_fds_count * @sizeOf(fd_t);
+    const header: *CmsgHeader = @ptrCast(&control);
     header.* = .{
       .len   = CMSG_HEADER_SIZE + fds_size,
       .level = std.os.linux.SOL.SOCKET,
@@ -324,7 +333,8 @@ pub const Connection = struct {
         .controllen = control_len,
         .flags      = 0,
       };
-      sent += try os.sendmsg(conn.socket_fd, &msg, std.os.linux.MSG.NOSIGNAL);
+      const send_result = std.os.linux.sendmsg(conn.socket_fd, &msg, std.os.linux.MSG.NOSIGNAL);
+      sent += try syscall_result(send_result);
       control_len = 0;
     }
     assert(sent == bytes.len);
@@ -360,7 +370,8 @@ pub const Connection = struct {
       .controllen = control.len,
       .flags      = 0,
     };
-    const len = os.recvmsg(conn.socket_fd, &msg, std.os.linux.MSG.CMSG_CLOEXEC) catch |e| switch (e) {
+    const recv_result = std.os.linux.recvmsg(conn.socket_fd, &msg, std.os.linux.MSG.CMSG_CLOEXEC);
+    const len = syscall_result(recv_result) catch |e| switch (e) {
       error.WouldBlock => return 0,
       else             => return e,
     };
@@ -385,7 +396,7 @@ pub const Connection = struct {
 
   fn fd_push(conn: *Connection, fd: fd_t) !void {
     if (RECV_FDS_MAX <= conn.recv_fds_count) {
-      os.close(fd);
+      _ = std.os.linux.close(fd);
       return error.TooManyFds;
     }
     conn.recv_fds[(conn.recv_fds_start + conn.recv_fds_count) % RECV_FDS_MAX] = fd;
@@ -527,8 +538,8 @@ test "fds are passed in order" {
     0,
     &sockets,
   ));
-  defer os.close(sockets[0]);
-  defer os.close(sockets[1]);
+  defer _ = std.os.linux.close(sockets[0]);
+  defer _ = std.os.linux.close(sockets[1]);
 
   var client: Connection = undefined;
   client.init(sockets[0]);
@@ -537,8 +548,8 @@ test "fds are passed in order" {
 
   var pipe_fds: [2]i32 = undefined;
   try std.testing.expectEqual(0, std.os.linux.pipe2(&pipe_fds, .{}));
-  defer os.close(pipe_fds[0]);
-  defer os.close(pipe_fds[1]);
+  defer _ = std.os.linux.close(pipe_fds[0]);
+  defer _ = std.os.linux.close(pipe_fds[1]);
 
   const start = try client.message_begin(1, 0, HEADER_SIZE, 2);
   client.put_fd(pipe_fds[0]);
@@ -550,12 +561,12 @@ test "fds are passed in order" {
   _ = (try server.message_next()).?;
   const read_fd  = try server.fd_take();
   const write_fd = try server.fd_take();
-  defer os.close(read_fd);
-  defer os.close(write_fd);
+  defer _ = std.os.linux.close(read_fd);
+  defer _ = std.os.linux.close(write_fd);
   try std.testing.expectError(error.InvalidMessage, server.fd_take());
 
-  _ = try os.write(write_fd, "x");
+  try std.testing.expectEqual(1, std.os.linux.write(write_fd, "x", 1));
   var byte: [1]u8 = undefined;
-  try std.testing.expectEqual(1, try os.read(pipe_fds[0], &byte));
+  try std.testing.expectEqual(1, std.os.linux.read(pipe_fds[0], &byte, 1));
   try std.testing.expectEqual(0, try server.receive());
 }
