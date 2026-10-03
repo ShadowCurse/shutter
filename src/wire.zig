@@ -35,8 +35,26 @@ comptime {
   assert(CMSG_HEADER_SIZE == 16);
 }
 
+pub const Error = error{
+  // `Connection.connect` could not find or fit the socket path.
+  NoXDGRuntimeDir,
+  InvalidWaylandDisplay,
+  SocketPathTooLong,
+  // Socket operations.
+  WouldBlock,
+  ConnectionClosed,
+  ControlMessageTruncated,
+  Unexpected,
+  // Server sent malformed data or more than the fixed limits allow.
+  InvalidMessage,
+  TooManyObjects,
+  TooManyFds,
+  // Request does not fit into a single message.
+  MessageTooLarge,
+};
+
 // Converts a raw syscall return value into a result or an error.
-fn syscall_result(result: usize) !usize {
+fn syscall_result(result: usize) Error!usize {
   return switch (std.os.linux.errno(result)) {
     .SUCCESS => result,
     .AGAIN   => error.WouldBlock,
@@ -77,14 +95,14 @@ pub const Reader = struct {
   payload: []const u32,
   index: u32 = 0,
 
-  pub fn uint(reader: *Reader) !u32 {
+  pub fn uint(reader: *Reader) Error!u32 {
     if (reader.payload.len <= reader.index) return error.InvalidMessage;
     const value = reader.payload[reader.index];
     reader.index += 1;
     return value;
   }
 
-  pub fn array(reader: *Reader) ![]const u8 {
+  pub fn array(reader: *Reader) Error![]const u8 {
     const len   = try reader.uint();
     const words = std.mem.alignForward(u32, len, 4) / 4;
     if (reader.payload.len - reader.index < words) return error.InvalidMessage;
@@ -93,14 +111,14 @@ pub const Reader = struct {
     return bytes[0..len];
   }
 
-  pub fn string_optional(reader: *Reader) !?[]const u8 {
+  pub fn string_optional(reader: *Reader) Error!?[]const u8 {
     const bytes = try reader.array();
     if (bytes.len == 0) return null;
     if (bytes[bytes.len - 1] != 0) return error.InvalidMessage;
     return bytes[0 .. bytes.len - 1];
   }
 
-  pub fn string(reader: *Reader) ![]const u8 {
+  pub fn string(reader: *Reader) Error![]const u8 {
     return try reader.string_optional() orelse error.InvalidMessage;
   }
 };
@@ -150,7 +168,7 @@ pub const Connection = struct {
     environ: *const std.process.Environ,
     xdg_runtime_dir: ?[]const u8,
     wayland_display: ?[]const u8,
-  ) !void {
+  ) Error!void {
     const xrd = xdg_runtime_dir orelse environ.getPosix("XDG_RUNTIME_DIR") orelse
       return error.NoXDGRuntimeDir;
     const wd = wayland_display orelse environ.getPosix("WAYLAND_DISPLAY") orelse "wayland-0";
@@ -168,9 +186,9 @@ pub const Connection = struct {
       .path   = undefined,
     };
     const path = if (wd[0] == '/')
-      try std.fmt.bufPrint(&addr.path, "{s}", .{ wd })
+      std.fmt.bufPrint(&addr.path, "{s}", .{ wd }) catch return error.SocketPathTooLong
     else
-      try std.fmt.bufPrint(&addr.path, "{s}/{s}", .{ xrd, wd });
+      std.fmt.bufPrint(&addr.path, "{s}/{s}", .{ xrd, wd }) catch return error.SocketPathTooLong;
 
     _ = try syscall_result(std.os.linux.connect(
       socket_fd,
@@ -180,7 +198,7 @@ pub const Connection = struct {
     conn.init(socket_fd);
   }
 
-  pub fn object_new(conn: *Connection, interface: u8) !u32 {
+  pub fn object_new(conn: *Connection, interface: u8) Error!u32 {
     assert(interface != 0);
 
     var id: u32 = undefined;
@@ -200,7 +218,7 @@ pub const Connection = struct {
   }
 
   /// Registers an object created by the server with a `new_id` event argument.
-  pub fn object_new_server(conn: *Connection, id: u32, interface: u8) !u32 {
+  pub fn object_new_server(conn: *Connection, id: u32, interface: u8) Error!u32 {
     assert(interface != 0);
 
     if (id < SERVER_ID_FIRST) return error.InvalidMessage;
@@ -241,7 +259,7 @@ pub const Connection = struct {
   }
 
   /// Reserves `size` bytes and `fds` file descriptors for one message and writes its header.
-  pub fn message_begin(conn: *Connection, id: u32, opcode: u16, size: u32, fds: u32) !u32 {
+  pub fn message_begin(conn: *Connection, id: u32, opcode: u16, size: u32, fds: u32) Error!u32 {
     assert(HEADER_SIZE <= size);
     assert(size % 4 == 0);
     assert(fds <= FDS_MAX);
@@ -299,7 +317,7 @@ pub const Connection = struct {
   }
 
   /// Sends all queued messages. File descriptors go with the first `sendmsg`.
-  pub fn flush(conn: *Connection) !void {
+  pub fn flush(conn: *Connection) Error!void {
     if (conn.send_words_count == 0) {
       assert(conn.send_fds_count == 0);
       return;
@@ -345,7 +363,7 @@ pub const Connection = struct {
 
   /// Reads available bytes and file descriptors from the socket. Returns number of bytes read.
   /// Invalidates payloads of previously returned messages.
-  pub fn receive(conn: *Connection) !u32 {
+  pub fn receive(conn: *Connection) Error!u32 {
     assert(conn.recv_start <= conn.recv_end);
     assert(conn.recv_start % 4 == 0);
 
@@ -394,7 +412,7 @@ pub const Connection = struct {
     return @intCast(len);
   }
 
-  fn fd_push(conn: *Connection, fd: fd_t) !void {
+  fn fd_push(conn: *Connection, fd: fd_t) Error!void {
     if (RECV_FDS_MAX <= conn.recv_fds_count) {
       _ = std.os.linux.close(fd);
       return error.TooManyFds;
@@ -404,7 +422,7 @@ pub const Connection = struct {
   }
 
   /// Takes the next received file descriptor. Caller owns it.
-  pub fn fd_take(conn: *Connection) !fd_t {
+  pub fn fd_take(conn: *Connection) Error!fd_t {
     if (conn.recv_fds_count == 0) return error.InvalidMessage;
     const fd = conn.recv_fds[conn.recv_fds_start];
     conn.recv_fds_start = (conn.recv_fds_start + 1) % RECV_FDS_MAX;
@@ -414,7 +432,7 @@ pub const Connection = struct {
 
   /// Returns the next complete received message or null if more bytes are needed.
   /// Payload is valid until the next `receive`.
-  pub fn message_next(conn: *Connection) !?Message {
+  pub fn message_next(conn: *Connection) Error!?Message {
     assert(conn.recv_start <= conn.recv_end);
     assert(conn.recv_start % 4 == 0);
 

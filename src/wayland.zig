@@ -33,11 +33,11 @@ pub fn device_number(major: u32, minor: u32) DeviceNumber {
   return (ma & 0xfffff000) << 32 | (ma & 0xfff) << 8 | (mi & 0xffffff00) << 12 | (mi & 0xff);
 }
 
-fn object_new(conn: *wire.Connection, comptime T: type) !T.Id {
+fn object_new(conn: *wire.Connection, comptime T: type) wire.Error!T.Id {
   return @enumFromInt(try conn.object_new(@intFromEnum(T.INTERFACE)));
 }
 
-fn object_new_server(conn: *wire.Connection, id: u32, comptime T: type) !T.Id {
+fn object_new_server(conn: *wire.Connection, id: u32, comptime T: type) wire.Error!T.Id {
   return @enumFromInt(try conn.object_new_server(id, @intFromEnum(T.INTERFACE)));
 }
 
@@ -114,7 +114,7 @@ pub const wl_display = struct {
   };
 
   /// asynchronous roundtrip
-  pub fn sync(conn: *wire.Connection, self: Id) !wl_callback.Id {
+  pub fn sync(conn: *wire.Connection, self: Id) wire.Error!wl_callback.Id {
     const callback      = try object_new(conn, wl_callback);
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
@@ -124,7 +124,7 @@ pub const wl_display = struct {
   }
 
   /// get global registry object
-  pub fn get_registry(conn: *wire.Connection, self: Id) !wl_registry.Id {
+  pub fn get_registry(conn: *wire.Connection, self: Id) wire.Error!wl_registry.Id {
     const registry      = try object_new(conn, wl_registry);
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
@@ -155,7 +155,7 @@ pub const wl_display = struct {
     };
   };
 
-  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     _ = conn;
     var reader: wire.Reader = .{ .payload = payload };
     switch (opcode) {
@@ -180,7 +180,7 @@ pub const wl_registry = struct {
   pub const Id = enum(u32) { none = 0, _ };
 
   /// bind an object to the display
-  pub fn bind(conn: *wire.Connection, self: Id, name: u32, comptime T: type, version: u32) !T.Id {
+  pub fn bind(conn: *wire.Connection, self: Id, name: u32, comptime T: type, version: u32) wire.Error!T.Id {
     const id            = try object_new(conn, T);
     const message_size  = 20 + wire.string_size(T.NAME);
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
@@ -214,7 +214,7 @@ pub const wl_registry = struct {
     };
   };
 
-  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     _ = conn;
     var reader: wire.Reader = .{ .payload = payload };
     switch (opcode) {
@@ -251,7 +251,7 @@ pub const wl_callback = struct {
     };
   };
 
-  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     _ = conn;
     var reader: wire.Reader = .{ .payload = payload };
     switch (opcode) {
@@ -271,7 +271,7 @@ pub const wl_compositor = struct {
   pub const Id = enum(u32) { none = 0, _ };
 
   /// create new surface
-  pub fn create_surface(conn: *wire.Connection, self: Id) !wl_surface.Id {
+  pub fn create_surface(conn: *wire.Connection, self: Id) wire.Error!wl_surface.Id {
     const id            = try object_new(conn, wl_surface);
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
@@ -281,7 +281,7 @@ pub const wl_compositor = struct {
   }
 
   /// create new region
-  pub fn create_region(conn: *wire.Connection, self: Id) !wl_region.Id {
+  pub fn create_region(conn: *wire.Connection, self: Id) wire.Error!wl_region.Id {
     const id            = try object_new(conn, wl_region);
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
@@ -291,7 +291,7 @@ pub const wl_compositor = struct {
   }
 
   /// destroy wl_compositor
-  pub fn release(conn: *wire.Connection, self: Id) !void {
+  pub fn release(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 2, message_size, 0);
     conn.message_end(message_start);
@@ -323,7 +323,7 @@ pub const wl_shm_pool = struct {
     height: i32,
     stride: i32,
     format: wl_shm.Format,
-  ) !wl_buffer.Id {
+  ) wire.Error!wl_buffer.Id {
     const id            = try object_new(conn, wl_buffer);
     const message_size  = 32;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
@@ -338,7 +338,7 @@ pub const wl_shm_pool = struct {
   }
 
   /// destroy the pool
-  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+  pub fn destroy(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
     conn.message_end(message_start);
@@ -346,7 +346,7 @@ pub const wl_shm_pool = struct {
   }
 
   /// change the size of the pool mapping
-  pub fn resize(conn: *wire.Connection, self: Id, size: i32) !void {
+  pub fn resize(conn: *wire.Connection, self: Id, size: i32) wire.Error!void {
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 2, message_size, 0);
     conn.put_uint(@bitCast(size));
@@ -659,7 +659,12 @@ pub const wl_shm = struct {
   };
 
   /// create a shm pool
-  pub fn create_pool(conn: *wire.Connection, self: Id, fd: std.os.linux.fd_t, size: i32) !wl_shm_pool.Id {
+  pub fn create_pool(
+    conn: *wire.Connection,
+    self: Id,
+    fd: std.os.linux.fd_t,
+    size: i32,
+  ) wire.Error!wl_shm_pool.Id {
     const id            = try object_new(conn, wl_shm_pool);
     const message_size  = 16;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 1);
@@ -671,7 +676,7 @@ pub const wl_shm = struct {
   }
 
   /// release the shm object
-  pub fn release(conn: *wire.Connection, self: Id) !void {
+  pub fn release(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
     conn.message_end(message_start);
@@ -691,7 +696,7 @@ pub const wl_shm = struct {
     };
   };
 
-  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     _ = conn;
     var reader: wire.Reader = .{ .payload = payload };
     switch (opcode) {
@@ -711,7 +716,7 @@ pub const wl_buffer = struct {
   pub const Id = enum(u32) { none = 0, _ };
 
   /// destroy a buffer
-  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+  pub fn destroy(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.message_end(message_start);
@@ -729,7 +734,7 @@ pub const wl_buffer = struct {
     pub const Release = struct {};
   };
 
-  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     _ = conn;
     _ = payload;
     switch (opcode) {
@@ -759,7 +764,7 @@ pub const wl_data_offer = struct {
   };
 
   /// accept one of the offered mime types
-  pub fn accept(conn: *wire.Connection, self: Id, serial: u32, mime_type: ?[]const u8) !void {
+  pub fn accept(conn: *wire.Connection, self: Id, serial: u32, mime_type: ?[]const u8) wire.Error!void {
     const message_size  = 12 + wire.string_size(mime_type);
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.put_uint(serial);
@@ -768,7 +773,12 @@ pub const wl_data_offer = struct {
   }
 
   /// request that the data is transferred
-  pub fn receive(conn: *wire.Connection, self: Id, mime_type: []const u8, fd: std.os.linux.fd_t) !void {
+  pub fn receive(
+    conn: *wire.Connection,
+    self: Id,
+    mime_type: []const u8,
+    fd: std.os.linux.fd_t,
+  ) wire.Error!void {
     const message_size  = 8 + wire.string_size(mime_type);
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 1);
     conn.put_string(mime_type);
@@ -777,7 +787,7 @@ pub const wl_data_offer = struct {
   }
 
   /// destroy data offer
-  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+  pub fn destroy(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 2, message_size, 0);
     conn.message_end(message_start);
@@ -785,7 +795,7 @@ pub const wl_data_offer = struct {
   }
 
   /// the offer will no longer be used
-  pub fn finish(conn: *wire.Connection, self: Id) !void {
+  pub fn finish(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 3, message_size, 0);
     conn.message_end(message_start);
@@ -797,7 +807,7 @@ pub const wl_data_offer = struct {
     self: Id,
     dnd_actions: wl_data_device_manager.DndAction,
     preferred_action: wl_data_device_manager.DndAction,
-  ) !void {
+  ) wire.Error!void {
     const message_size  = 16;
     const message_start = try conn.message_begin(@intFromEnum(self), 4, message_size, 0);
     conn.put_uint(@bitCast(dnd_actions));
@@ -832,7 +842,7 @@ pub const wl_data_offer = struct {
     };
   };
 
-  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     _ = conn;
     var reader: wire.Reader = .{ .payload = payload };
     switch (opcode) {
@@ -866,7 +876,7 @@ pub const wl_data_source = struct {
   };
 
   /// add an offered mime type
-  pub fn offer(conn: *wire.Connection, self: Id, mime_type: []const u8) !void {
+  pub fn offer(conn: *wire.Connection, self: Id, mime_type: []const u8) wire.Error!void {
     const message_size  = 8 + wire.string_size(mime_type);
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.put_string(mime_type);
@@ -874,7 +884,7 @@ pub const wl_data_source = struct {
   }
 
   /// destroy the data source
-  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+  pub fn destroy(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
     conn.message_end(message_start);
@@ -882,7 +892,11 @@ pub const wl_data_source = struct {
   }
 
   /// set the available drag-and-drop actions
-  pub fn set_actions(conn: *wire.Connection, self: Id, dnd_actions: wl_data_device_manager.DndAction) !void {
+  pub fn set_actions(
+    conn: *wire.Connection,
+    self: Id,
+    dnd_actions: wl_data_device_manager.DndAction,
+  ) wire.Error!void {
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 2, message_size, 0);
     conn.put_uint(@bitCast(dnd_actions));
@@ -932,7 +946,7 @@ pub const wl_data_source = struct {
     };
   };
 
-  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     var reader: wire.Reader = .{ .payload = payload };
     switch (opcode) {
       0 => return .{ .target = .{
@@ -976,7 +990,7 @@ pub const wl_data_device = struct {
     origin: wl_surface.Id,
     icon: wl_surface.Id,
     serial: u32,
-  ) !void {
+  ) wire.Error!void {
     const message_size  = 24;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.put_uint(@intFromEnum(source));
@@ -987,7 +1001,12 @@ pub const wl_data_device = struct {
   }
 
   /// copy data to the selection
-  pub fn set_selection(conn: *wire.Connection, self: Id, source: wl_data_source.Id, serial: u32) !void {
+  pub fn set_selection(
+    conn: *wire.Connection,
+    self: Id,
+    source: wl_data_source.Id,
+    serial: u32,
+  ) wire.Error!void {
     const message_size  = 16;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
     conn.put_uint(@intFromEnum(source));
@@ -996,7 +1015,7 @@ pub const wl_data_device = struct {
   }
 
   /// destroy data device
-  pub fn release(conn: *wire.Connection, self: Id) !void {
+  pub fn release(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 2, message_size, 0);
     conn.message_end(message_start);
@@ -1053,7 +1072,7 @@ pub const wl_data_device = struct {
     };
   };
 
-  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     var reader: wire.Reader = .{ .payload = payload };
     switch (opcode) {
       0 => return .{ .data_offer = .{
@@ -1101,7 +1120,7 @@ pub const wl_data_device_manager = struct {
   };
 
   /// create a new data source
-  pub fn create_data_source(conn: *wire.Connection, self: Id) !wl_data_source.Id {
+  pub fn create_data_source(conn: *wire.Connection, self: Id) wire.Error!wl_data_source.Id {
     const id            = try object_new(conn, wl_data_source);
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
@@ -1111,7 +1130,7 @@ pub const wl_data_device_manager = struct {
   }
 
   /// create a new data device
-  pub fn get_data_device(conn: *wire.Connection, self: Id, seat: wl_seat.Id) !wl_data_device.Id {
+  pub fn get_data_device(conn: *wire.Connection, self: Id, seat: wl_seat.Id) wire.Error!wl_data_device.Id {
     const id            = try object_new(conn, wl_data_device);
     const message_size  = 16;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
@@ -1122,7 +1141,7 @@ pub const wl_data_device_manager = struct {
   }
 
   /// destroy wl_data_device_manager
-  pub fn release(conn: *wire.Connection, self: Id) !void {
+  pub fn release(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 2, message_size, 0);
     conn.message_end(message_start);
@@ -1144,7 +1163,11 @@ pub const wl_shell = struct {
   };
 
   /// create a shell surface from a surface
-  pub fn get_shell_surface(conn: *wire.Connection, self: Id, surface: wl_surface.Id) !wl_shell_surface.Id {
+  pub fn get_shell_surface(
+    conn: *wire.Connection,
+    self: Id,
+    surface: wl_surface.Id,
+  ) wire.Error!wl_shell_surface.Id {
     const id            = try object_new(conn, wl_shell_surface);
     const message_size  = 16;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
@@ -1204,7 +1227,7 @@ pub const wl_shell_surface = struct {
   };
 
   /// respond to a ping event
-  pub fn pong(conn: *wire.Connection, self: Id, serial: u32) !void {
+  pub fn pong(conn: *wire.Connection, self: Id, serial: u32) wire.Error!void {
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.put_uint(serial);
@@ -1212,7 +1235,7 @@ pub const wl_shell_surface = struct {
   }
 
   /// start an interactive move
-  pub fn move(conn: *wire.Connection, self: Id, seat: wl_seat.Id, serial: u32) !void {
+  pub fn move(conn: *wire.Connection, self: Id, seat: wl_seat.Id, serial: u32) wire.Error!void {
     const message_size  = 16;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
     conn.put_uint(@intFromEnum(seat));
@@ -1227,7 +1250,7 @@ pub const wl_shell_surface = struct {
     seat: wl_seat.Id,
     serial: u32,
     edges: wl_shell_surface.Resize,
-  ) !void {
+  ) wire.Error!void {
     const message_size  = 20;
     const message_start = try conn.message_begin(@intFromEnum(self), 2, message_size, 0);
     conn.put_uint(@intFromEnum(seat));
@@ -1237,7 +1260,7 @@ pub const wl_shell_surface = struct {
   }
 
   /// make the surface a toplevel surface
-  pub fn set_toplevel(conn: *wire.Connection, self: Id) !void {
+  pub fn set_toplevel(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 3, message_size, 0);
     conn.message_end(message_start);
@@ -1251,7 +1274,7 @@ pub const wl_shell_surface = struct {
     x: i32,
     y: i32,
     flags: wl_shell_surface.Transient,
-  ) !void {
+  ) wire.Error!void {
     const message_size  = 24;
     const message_start = try conn.message_begin(@intFromEnum(self), 4, message_size, 0);
     conn.put_uint(@intFromEnum(parent));
@@ -1268,7 +1291,7 @@ pub const wl_shell_surface = struct {
     method: wl_shell_surface.FullscreenMethod,
     framerate: u32,
     output: wl_output.Id,
-  ) !void {
+  ) wire.Error!void {
     const message_size  = 20;
     const message_start = try conn.message_begin(@intFromEnum(self), 5, message_size, 0);
     conn.put_uint(@intFromEnum(method));
@@ -1287,7 +1310,7 @@ pub const wl_shell_surface = struct {
     x: i32,
     y: i32,
     flags: wl_shell_surface.Transient,
-  ) !void {
+  ) wire.Error!void {
     const message_size  = 32;
     const message_start = try conn.message_begin(@intFromEnum(self), 6, message_size, 0);
     conn.put_uint(@intFromEnum(seat));
@@ -1300,7 +1323,7 @@ pub const wl_shell_surface = struct {
   }
 
   /// make the surface a maximized surface
-  pub fn set_maximized(conn: *wire.Connection, self: Id, output: wl_output.Id) !void {
+  pub fn set_maximized(conn: *wire.Connection, self: Id, output: wl_output.Id) wire.Error!void {
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 7, message_size, 0);
     conn.put_uint(@intFromEnum(output));
@@ -1308,7 +1331,7 @@ pub const wl_shell_surface = struct {
   }
 
   /// set surface title
-  pub fn set_title(conn: *wire.Connection, self: Id, title: []const u8) !void {
+  pub fn set_title(conn: *wire.Connection, self: Id, title: []const u8) wire.Error!void {
     const message_size  = 8 + wire.string_size(title);
     const message_start = try conn.message_begin(@intFromEnum(self), 8, message_size, 0);
     conn.put_string(title);
@@ -1316,7 +1339,7 @@ pub const wl_shell_surface = struct {
   }
 
   /// set surface class
-  pub fn set_class(conn: *wire.Connection, self: Id, class_: []const u8) !void {
+  pub fn set_class(conn: *wire.Connection, self: Id, class_: []const u8) wire.Error!void {
     const message_size  = 8 + wire.string_size(class_);
     const message_start = try conn.message_begin(@intFromEnum(self), 9, message_size, 0);
     conn.put_string(class_);
@@ -1350,7 +1373,7 @@ pub const wl_shell_surface = struct {
     pub const PopupDone = struct {};
   };
 
-  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     _ = conn;
     var reader: wire.Reader = .{ .payload = payload };
     switch (opcode) {
@@ -1392,7 +1415,7 @@ pub const wl_surface = struct {
   };
 
   /// delete surface
-  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+  pub fn destroy(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.message_end(message_start);
@@ -1400,7 +1423,7 @@ pub const wl_surface = struct {
   }
 
   /// set the surface contents
-  pub fn attach(conn: *wire.Connection, self: Id, buffer: wl_buffer.Id, x: i32, y: i32) !void {
+  pub fn attach(conn: *wire.Connection, self: Id, buffer: wl_buffer.Id, x: i32, y: i32) wire.Error!void {
     const message_size  = 20;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
     conn.put_uint(@intFromEnum(buffer));
@@ -1410,7 +1433,7 @@ pub const wl_surface = struct {
   }
 
   /// mark part of the surface damaged
-  pub fn damage(conn: *wire.Connection, self: Id, x: i32, y: i32, width: i32, height: i32) !void {
+  pub fn damage(conn: *wire.Connection, self: Id, x: i32, y: i32, width: i32, height: i32) wire.Error!void {
     const message_size  = 24;
     const message_start = try conn.message_begin(@intFromEnum(self), 2, message_size, 0);
     conn.put_uint(@bitCast(x));
@@ -1421,7 +1444,7 @@ pub const wl_surface = struct {
   }
 
   /// request a frame throttling hint
-  pub fn frame(conn: *wire.Connection, self: Id) !wl_callback.Id {
+  pub fn frame(conn: *wire.Connection, self: Id) wire.Error!wl_callback.Id {
     const callback      = try object_new(conn, wl_callback);
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 3, message_size, 0);
@@ -1431,7 +1454,7 @@ pub const wl_surface = struct {
   }
 
   /// set opaque region
-  pub fn set_opaque_region(conn: *wire.Connection, self: Id, region: wl_region.Id) !void {
+  pub fn set_opaque_region(conn: *wire.Connection, self: Id, region: wl_region.Id) wire.Error!void {
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 4, message_size, 0);
     conn.put_uint(@intFromEnum(region));
@@ -1439,7 +1462,7 @@ pub const wl_surface = struct {
   }
 
   /// set input region
-  pub fn set_input_region(conn: *wire.Connection, self: Id, region: wl_region.Id) !void {
+  pub fn set_input_region(conn: *wire.Connection, self: Id, region: wl_region.Id) wire.Error!void {
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 5, message_size, 0);
     conn.put_uint(@intFromEnum(region));
@@ -1447,14 +1470,18 @@ pub const wl_surface = struct {
   }
 
   /// commit pending surface state
-  pub fn commit(conn: *wire.Connection, self: Id) !void {
+  pub fn commit(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 6, message_size, 0);
     conn.message_end(message_start);
   }
 
   /// sets the buffer transformation
-  pub fn set_buffer_transform(conn: *wire.Connection, self: Id, transform: wl_output.Transform) !void {
+  pub fn set_buffer_transform(
+    conn: *wire.Connection,
+    self: Id,
+    transform: wl_output.Transform,
+  ) wire.Error!void {
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 7, message_size, 0);
     conn.put_uint(@intFromEnum(transform));
@@ -1462,7 +1489,7 @@ pub const wl_surface = struct {
   }
 
   /// sets the buffer scaling factor
-  pub fn set_buffer_scale(conn: *wire.Connection, self: Id, scale: i32) !void {
+  pub fn set_buffer_scale(conn: *wire.Connection, self: Id, scale: i32) wire.Error!void {
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 8, message_size, 0);
     conn.put_uint(@bitCast(scale));
@@ -1470,7 +1497,14 @@ pub const wl_surface = struct {
   }
 
   /// mark part of the surface damaged using buffer coordinates
-  pub fn damage_buffer(conn: *wire.Connection, self: Id, x: i32, y: i32, width: i32, height: i32) !void {
+  pub fn damage_buffer(
+    conn: *wire.Connection,
+    self: Id,
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+  ) wire.Error!void {
     const message_size  = 24;
     const message_start = try conn.message_begin(@intFromEnum(self), 9, message_size, 0);
     conn.put_uint(@bitCast(x));
@@ -1481,7 +1515,7 @@ pub const wl_surface = struct {
   }
 
   /// set the surface contents offset
-  pub fn offset(conn: *wire.Connection, self: Id, x: i32, y: i32) !void {
+  pub fn offset(conn: *wire.Connection, self: Id, x: i32, y: i32) wire.Error!void {
     const message_size  = 16;
     const message_start = try conn.message_begin(@intFromEnum(self), 10, message_size, 0);
     conn.put_uint(@bitCast(x));
@@ -1490,7 +1524,7 @@ pub const wl_surface = struct {
   }
 
   /// get a release callback
-  pub fn get_release(conn: *wire.Connection, self: Id) !wl_callback.Id {
+  pub fn get_release(conn: *wire.Connection, self: Id) wire.Error!wl_callback.Id {
     const callback      = try object_new(conn, wl_callback);
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 11, message_size, 0);
@@ -1533,7 +1567,7 @@ pub const wl_surface = struct {
     };
   };
 
-  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     _ = conn;
     var reader: wire.Reader = .{ .payload = payload };
     switch (opcode) {
@@ -1578,7 +1612,7 @@ pub const wl_seat = struct {
   };
 
   /// return pointer object
-  pub fn get_pointer(conn: *wire.Connection, self: Id) !wl_pointer.Id {
+  pub fn get_pointer(conn: *wire.Connection, self: Id) wire.Error!wl_pointer.Id {
     const id            = try object_new(conn, wl_pointer);
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
@@ -1588,7 +1622,7 @@ pub const wl_seat = struct {
   }
 
   /// return keyboard object
-  pub fn get_keyboard(conn: *wire.Connection, self: Id) !wl_keyboard.Id {
+  pub fn get_keyboard(conn: *wire.Connection, self: Id) wire.Error!wl_keyboard.Id {
     const id            = try object_new(conn, wl_keyboard);
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
@@ -1598,7 +1632,7 @@ pub const wl_seat = struct {
   }
 
   /// return touch object
-  pub fn get_touch(conn: *wire.Connection, self: Id) !wl_touch.Id {
+  pub fn get_touch(conn: *wire.Connection, self: Id) wire.Error!wl_touch.Id {
     const id            = try object_new(conn, wl_touch);
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 2, message_size, 0);
@@ -1608,7 +1642,7 @@ pub const wl_seat = struct {
   }
 
   /// release the seat object
-  pub fn release(conn: *wire.Connection, self: Id) !void {
+  pub fn release(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 3, message_size, 0);
     conn.message_end(message_start);
@@ -1635,7 +1669,7 @@ pub const wl_seat = struct {
     };
   };
 
-  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     _ = conn;
     var reader: wire.Reader = .{ .payload = payload };
     switch (opcode) {
@@ -1707,7 +1741,7 @@ pub const wl_pointer = struct {
     surface: wl_surface.Id,
     hotspot_x: i32,
     hotspot_y: i32,
-  ) !void {
+  ) wire.Error!void {
     const message_size  = 24;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.put_uint(serial);
@@ -1718,7 +1752,7 @@ pub const wl_pointer = struct {
   }
 
   /// release the pointer object
-  pub fn release(conn: *wire.Connection, self: Id) !void {
+  pub fn release(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
     conn.message_end(message_start);
@@ -1829,7 +1863,7 @@ pub const wl_pointer = struct {
     };
   };
 
-  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     _ = conn;
     var reader: wire.Reader = .{ .payload = payload };
     switch (opcode) {
@@ -1915,7 +1949,7 @@ pub const wl_keyboard = struct {
   };
 
   /// release the keyboard object
-  pub fn release(conn: *wire.Connection, self: Id) !void {
+  pub fn release(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.message_end(message_start);
@@ -1983,7 +2017,7 @@ pub const wl_keyboard = struct {
     };
   };
 
-  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     var reader: wire.Reader = .{ .payload = payload };
     switch (opcode) {
       0 => return .{ .keymap = .{
@@ -2030,7 +2064,7 @@ pub const wl_touch = struct {
   pub const Id = enum(u32) { none = 0, _ };
 
   /// release the touch object
-  pub fn release(conn: *wire.Connection, self: Id) !void {
+  pub fn release(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.message_end(message_start);
@@ -2101,7 +2135,7 @@ pub const wl_touch = struct {
     };
   };
 
-  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     _ = conn;
     var reader: wire.Reader = .{ .payload = payload };
     switch (opcode) {
@@ -2192,7 +2226,7 @@ pub const wl_output = struct {
   };
 
   /// release the output object
-  pub fn release(conn: *wire.Connection, self: Id) !void {
+  pub fn release(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.message_end(message_start);
@@ -2255,7 +2289,7 @@ pub const wl_output = struct {
     };
   };
 
-  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     _ = conn;
     var reader: wire.Reader = .{ .payload = payload };
     switch (opcode) {
@@ -2298,7 +2332,7 @@ pub const wl_region = struct {
   pub const Id = enum(u32) { none = 0, _ };
 
   /// destroy region
-  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+  pub fn destroy(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.message_end(message_start);
@@ -2306,7 +2340,7 @@ pub const wl_region = struct {
   }
 
   /// add rectangle to region
-  pub fn add(conn: *wire.Connection, self: Id, x: i32, y: i32, width: i32, height: i32) !void {
+  pub fn add(conn: *wire.Connection, self: Id, x: i32, y: i32, width: i32, height: i32) wire.Error!void {
     const message_size  = 24;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
     conn.put_uint(@bitCast(x));
@@ -2317,7 +2351,7 @@ pub const wl_region = struct {
   }
 
   /// subtract rectangle from region
-  pub fn subtract(conn: *wire.Connection, self: Id, x: i32, y: i32, width: i32, height: i32) !void {
+  pub fn subtract(conn: *wire.Connection, self: Id, x: i32, y: i32, width: i32, height: i32) wire.Error!void {
     const message_size  = 24;
     const message_start = try conn.message_begin(@intFromEnum(self), 2, message_size, 0);
     conn.put_uint(@bitCast(x));
@@ -2344,7 +2378,7 @@ pub const wl_subcompositor = struct {
   };
 
   /// unbind from the subcompositor interface
-  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+  pub fn destroy(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.message_end(message_start);
@@ -2357,7 +2391,7 @@ pub const wl_subcompositor = struct {
     self: Id,
     surface: wl_surface.Id,
     parent: wl_surface.Id,
-  ) !wl_subsurface.Id {
+  ) wire.Error!wl_subsurface.Id {
     const id            = try object_new(conn, wl_subsurface);
     const message_size  = 20;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
@@ -2383,7 +2417,7 @@ pub const wl_subsurface = struct {
   };
 
   /// remove sub-surface interface
-  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+  pub fn destroy(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.message_end(message_start);
@@ -2391,7 +2425,7 @@ pub const wl_subsurface = struct {
   }
 
   /// reposition the sub-surface
-  pub fn set_position(conn: *wire.Connection, self: Id, x: i32, y: i32) !void {
+  pub fn set_position(conn: *wire.Connection, self: Id, x: i32, y: i32) wire.Error!void {
     const message_size  = 16;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
     conn.put_uint(@bitCast(x));
@@ -2400,7 +2434,7 @@ pub const wl_subsurface = struct {
   }
 
   /// restack the sub-surface
-  pub fn place_above(conn: *wire.Connection, self: Id, sibling: wl_surface.Id) !void {
+  pub fn place_above(conn: *wire.Connection, self: Id, sibling: wl_surface.Id) wire.Error!void {
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 2, message_size, 0);
     conn.put_uint(@intFromEnum(sibling));
@@ -2408,7 +2442,7 @@ pub const wl_subsurface = struct {
   }
 
   /// restack the sub-surface
-  pub fn place_below(conn: *wire.Connection, self: Id, sibling: wl_surface.Id) !void {
+  pub fn place_below(conn: *wire.Connection, self: Id, sibling: wl_surface.Id) wire.Error!void {
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 3, message_size, 0);
     conn.put_uint(@intFromEnum(sibling));
@@ -2416,14 +2450,14 @@ pub const wl_subsurface = struct {
   }
 
   /// set sub-surface to synchronized mode
-  pub fn set_sync(conn: *wire.Connection, self: Id) !void {
+  pub fn set_sync(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 4, message_size, 0);
     conn.message_end(message_start);
   }
 
   /// set sub-surface to desynchronized mode
-  pub fn set_desync(conn: *wire.Connection, self: Id) !void {
+  pub fn set_desync(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 5, message_size, 0);
     conn.message_end(message_start);
@@ -2444,7 +2478,7 @@ pub const wl_fixes = struct {
   };
 
   /// destroys this object
-  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+  pub fn destroy(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.message_end(message_start);
@@ -2452,7 +2486,7 @@ pub const wl_fixes = struct {
   }
 
   /// destroy a wl_registry
-  pub fn destroy_registry(conn: *wire.Connection, self: Id, registry: wl_registry.Id) !void {
+  pub fn destroy_registry(conn: *wire.Connection, self: Id, registry: wl_registry.Id) wire.Error!void {
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
     conn.put_uint(@intFromEnum(registry));
@@ -2460,7 +2494,12 @@ pub const wl_fixes = struct {
   }
 
   /// acknowledge global removal
-  pub fn ack_global_remove(conn: *wire.Connection, self: Id, registry: wl_registry.Id, name: u32) !void {
+  pub fn ack_global_remove(
+    conn: *wire.Connection,
+    self: Id,
+    registry: wl_registry.Id,
+    name: u32,
+  ) wire.Error!void {
     const message_size  = 16;
     const message_start = try conn.message_begin(@intFromEnum(self), 2, message_size, 0);
     conn.put_uint(@intFromEnum(registry));
@@ -2497,7 +2536,7 @@ pub const xdg_wm_base = struct {
   };
 
   /// destroy xdg_wm_base
-  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+  pub fn destroy(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.message_end(message_start);
@@ -2505,7 +2544,7 @@ pub const xdg_wm_base = struct {
   }
 
   /// create a positioner object
-  pub fn create_positioner(conn: *wire.Connection, self: Id) !xdg_positioner.Id {
+  pub fn create_positioner(conn: *wire.Connection, self: Id) wire.Error!xdg_positioner.Id {
     const id            = try object_new(conn, xdg_positioner);
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
@@ -2515,7 +2554,7 @@ pub const xdg_wm_base = struct {
   }
 
   /// create a shell surface from a surface
-  pub fn get_xdg_surface(conn: *wire.Connection, self: Id, surface: wl_surface.Id) !xdg_surface.Id {
+  pub fn get_xdg_surface(conn: *wire.Connection, self: Id, surface: wl_surface.Id) wire.Error!xdg_surface.Id {
     const id            = try object_new(conn, xdg_surface);
     const message_size  = 16;
     const message_start = try conn.message_begin(@intFromEnum(self), 2, message_size, 0);
@@ -2526,7 +2565,7 @@ pub const xdg_wm_base = struct {
   }
 
   /// respond to a ping event
-  pub fn pong(conn: *wire.Connection, self: Id, serial: u32) !void {
+  pub fn pong(conn: *wire.Connection, self: Id, serial: u32) wire.Error!void {
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 3, message_size, 0);
     conn.put_uint(serial);
@@ -2546,7 +2585,7 @@ pub const xdg_wm_base = struct {
     };
   };
 
-  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     _ = conn;
     var reader: wire.Reader = .{ .payload = payload };
     switch (opcode) {
@@ -2616,7 +2655,7 @@ pub const xdg_positioner = struct {
   };
 
   /// destroy the xdg_positioner object
-  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+  pub fn destroy(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.message_end(message_start);
@@ -2624,7 +2663,7 @@ pub const xdg_positioner = struct {
   }
 
   /// set the size of the to-be positioned rectangle
-  pub fn set_size(conn: *wire.Connection, self: Id, width: i32, height: i32) !void {
+  pub fn set_size(conn: *wire.Connection, self: Id, width: i32, height: i32) wire.Error!void {
     const message_size  = 16;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
     conn.put_uint(@bitCast(width));
@@ -2633,7 +2672,14 @@ pub const xdg_positioner = struct {
   }
 
   /// set the anchor rectangle within the parent surface
-  pub fn set_anchor_rect(conn: *wire.Connection, self: Id, x: i32, y: i32, width: i32, height: i32) !void {
+  pub fn set_anchor_rect(
+    conn: *wire.Connection,
+    self: Id,
+    x: i32,
+    y: i32,
+    width: i32,
+    height: i32,
+  ) wire.Error!void {
     const message_size  = 24;
     const message_start = try conn.message_begin(@intFromEnum(self), 2, message_size, 0);
     conn.put_uint(@bitCast(x));
@@ -2644,7 +2690,7 @@ pub const xdg_positioner = struct {
   }
 
   /// set anchor rectangle anchor
-  pub fn set_anchor(conn: *wire.Connection, self: Id, anchor: xdg_positioner.Anchor) !void {
+  pub fn set_anchor(conn: *wire.Connection, self: Id, anchor: xdg_positioner.Anchor) wire.Error!void {
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 3, message_size, 0);
     conn.put_uint(@intFromEnum(anchor));
@@ -2652,7 +2698,7 @@ pub const xdg_positioner = struct {
   }
 
   /// set child surface gravity
-  pub fn set_gravity(conn: *wire.Connection, self: Id, gravity: xdg_positioner.Gravity) !void {
+  pub fn set_gravity(conn: *wire.Connection, self: Id, gravity: xdg_positioner.Gravity) wire.Error!void {
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 4, message_size, 0);
     conn.put_uint(@intFromEnum(gravity));
@@ -2664,7 +2710,7 @@ pub const xdg_positioner = struct {
     conn: *wire.Connection,
     self: Id,
     constraint_adjustment: xdg_positioner.ConstraintAdjustment,
-  ) !void {
+  ) wire.Error!void {
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 5, message_size, 0);
     conn.put_uint(@bitCast(constraint_adjustment));
@@ -2672,7 +2718,7 @@ pub const xdg_positioner = struct {
   }
 
   /// set surface position offset
-  pub fn set_offset(conn: *wire.Connection, self: Id, x: i32, y: i32) !void {
+  pub fn set_offset(conn: *wire.Connection, self: Id, x: i32, y: i32) wire.Error!void {
     const message_size  = 16;
     const message_start = try conn.message_begin(@intFromEnum(self), 6, message_size, 0);
     conn.put_uint(@bitCast(x));
@@ -2681,14 +2727,19 @@ pub const xdg_positioner = struct {
   }
 
   /// continuously reconstrain the surface
-  pub fn set_reactive(conn: *wire.Connection, self: Id) !void {
+  pub fn set_reactive(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 7, message_size, 0);
     conn.message_end(message_start);
   }
 
   /// set parent size
-  pub fn set_parent_size(conn: *wire.Connection, self: Id, parent_width: i32, parent_height: i32) !void {
+  pub fn set_parent_size(
+    conn: *wire.Connection,
+    self: Id,
+    parent_width: i32,
+    parent_height: i32,
+  ) wire.Error!void {
     const message_size  = 16;
     const message_start = try conn.message_begin(@intFromEnum(self), 8, message_size, 0);
     conn.put_uint(@bitCast(parent_width));
@@ -2697,7 +2748,7 @@ pub const xdg_positioner = struct {
   }
 
   /// set parent configure this is a response to
-  pub fn set_parent_configure(conn: *wire.Connection, self: Id, serial: u32) !void {
+  pub fn set_parent_configure(conn: *wire.Connection, self: Id, serial: u32) wire.Error!void {
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 9, message_size, 0);
     conn.put_uint(serial);
@@ -2729,7 +2780,7 @@ pub const xdg_surface = struct {
   };
 
   /// destroy the xdg_surface
-  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+  pub fn destroy(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.message_end(message_start);
@@ -2737,7 +2788,7 @@ pub const xdg_surface = struct {
   }
 
   /// assign the xdg_toplevel surface role
-  pub fn get_toplevel(conn: *wire.Connection, self: Id) !xdg_toplevel.Id {
+  pub fn get_toplevel(conn: *wire.Connection, self: Id) wire.Error!xdg_toplevel.Id {
     const id            = try object_new(conn, xdg_toplevel);
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
@@ -2752,7 +2803,7 @@ pub const xdg_surface = struct {
     self: Id,
     parent: xdg_surface.Id,
     positioner: xdg_positioner.Id,
-  ) !xdg_popup.Id {
+  ) wire.Error!xdg_popup.Id {
     const id            = try object_new(conn, xdg_popup);
     const message_size  = 20;
     const message_start = try conn.message_begin(@intFromEnum(self), 2, message_size, 0);
@@ -2771,7 +2822,7 @@ pub const xdg_surface = struct {
     y: i32,
     width: i32,
     height: i32,
-  ) !void {
+  ) wire.Error!void {
     const message_size  = 24;
     const message_start = try conn.message_begin(@intFromEnum(self), 3, message_size, 0);
     conn.put_uint(@bitCast(x));
@@ -2782,7 +2833,7 @@ pub const xdg_surface = struct {
   }
 
   /// ack a configure event
-  pub fn ack_configure(conn: *wire.Connection, self: Id, serial: u32) !void {
+  pub fn ack_configure(conn: *wire.Connection, self: Id, serial: u32) wire.Error!void {
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 4, message_size, 0);
     conn.put_uint(serial);
@@ -2802,7 +2853,7 @@ pub const xdg_surface = struct {
     };
   };
 
-  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     _ = conn;
     var reader: wire.Reader = .{ .payload = payload };
     switch (opcode) {
@@ -2887,7 +2938,7 @@ pub const xdg_toplevel = struct {
   };
 
   /// destroy the xdg_toplevel
-  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+  pub fn destroy(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.message_end(message_start);
@@ -2895,7 +2946,7 @@ pub const xdg_toplevel = struct {
   }
 
   /// set the parent of this surface
-  pub fn set_parent(conn: *wire.Connection, self: Id, parent: xdg_toplevel.Id) !void {
+  pub fn set_parent(conn: *wire.Connection, self: Id, parent: xdg_toplevel.Id) wire.Error!void {
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
     conn.put_uint(@intFromEnum(parent));
@@ -2903,7 +2954,7 @@ pub const xdg_toplevel = struct {
   }
 
   /// set surface title
-  pub fn set_title(conn: *wire.Connection, self: Id, title: []const u8) !void {
+  pub fn set_title(conn: *wire.Connection, self: Id, title: []const u8) wire.Error!void {
     const message_size  = 8 + wire.string_size(title);
     const message_start = try conn.message_begin(@intFromEnum(self), 2, message_size, 0);
     conn.put_string(title);
@@ -2911,7 +2962,7 @@ pub const xdg_toplevel = struct {
   }
 
   /// set application ID
-  pub fn set_app_id(conn: *wire.Connection, self: Id, app_id: []const u8) !void {
+  pub fn set_app_id(conn: *wire.Connection, self: Id, app_id: []const u8) wire.Error!void {
     const message_size  = 8 + wire.string_size(app_id);
     const message_start = try conn.message_begin(@intFromEnum(self), 3, message_size, 0);
     conn.put_string(app_id);
@@ -2926,7 +2977,7 @@ pub const xdg_toplevel = struct {
     serial: u32,
     x: i32,
     y: i32,
-  ) !void {
+  ) wire.Error!void {
     const message_size  = 24;
     const message_start = try conn.message_begin(@intFromEnum(self), 4, message_size, 0);
     conn.put_uint(@intFromEnum(seat));
@@ -2937,7 +2988,7 @@ pub const xdg_toplevel = struct {
   }
 
   /// start an interactive move
-  pub fn move(conn: *wire.Connection, self: Id, seat: wl_seat.Id, serial: u32) !void {
+  pub fn move(conn: *wire.Connection, self: Id, seat: wl_seat.Id, serial: u32) wire.Error!void {
     const message_size  = 16;
     const message_start = try conn.message_begin(@intFromEnum(self), 5, message_size, 0);
     conn.put_uint(@intFromEnum(seat));
@@ -2952,7 +3003,7 @@ pub const xdg_toplevel = struct {
     seat: wl_seat.Id,
     serial: u32,
     edges: xdg_toplevel.ResizeEdge,
-  ) !void {
+  ) wire.Error!void {
     const message_size  = 20;
     const message_start = try conn.message_begin(@intFromEnum(self), 6, message_size, 0);
     conn.put_uint(@intFromEnum(seat));
@@ -2962,7 +3013,7 @@ pub const xdg_toplevel = struct {
   }
 
   /// set the maximum size
-  pub fn set_max_size(conn: *wire.Connection, self: Id, width: i32, height: i32) !void {
+  pub fn set_max_size(conn: *wire.Connection, self: Id, width: i32, height: i32) wire.Error!void {
     const message_size  = 16;
     const message_start = try conn.message_begin(@intFromEnum(self), 7, message_size, 0);
     conn.put_uint(@bitCast(width));
@@ -2971,7 +3022,7 @@ pub const xdg_toplevel = struct {
   }
 
   /// set the minimum size
-  pub fn set_min_size(conn: *wire.Connection, self: Id, width: i32, height: i32) !void {
+  pub fn set_min_size(conn: *wire.Connection, self: Id, width: i32, height: i32) wire.Error!void {
     const message_size  = 16;
     const message_start = try conn.message_begin(@intFromEnum(self), 8, message_size, 0);
     conn.put_uint(@bitCast(width));
@@ -2980,21 +3031,21 @@ pub const xdg_toplevel = struct {
   }
 
   /// maximize the window
-  pub fn set_maximized(conn: *wire.Connection, self: Id) !void {
+  pub fn set_maximized(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 9, message_size, 0);
     conn.message_end(message_start);
   }
 
   /// unmaximize the window
-  pub fn unset_maximized(conn: *wire.Connection, self: Id) !void {
+  pub fn unset_maximized(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 10, message_size, 0);
     conn.message_end(message_start);
   }
 
   /// set the window as fullscreen on an output
-  pub fn set_fullscreen(conn: *wire.Connection, self: Id, output: wl_output.Id) !void {
+  pub fn set_fullscreen(conn: *wire.Connection, self: Id, output: wl_output.Id) wire.Error!void {
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 11, message_size, 0);
     conn.put_uint(@intFromEnum(output));
@@ -3002,14 +3053,14 @@ pub const xdg_toplevel = struct {
   }
 
   /// unset the window as fullscreen
-  pub fn unset_fullscreen(conn: *wire.Connection, self: Id) !void {
+  pub fn unset_fullscreen(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 12, message_size, 0);
     conn.message_end(message_start);
   }
 
   /// set the window as minimized
-  pub fn set_minimized(conn: *wire.Connection, self: Id) !void {
+  pub fn set_minimized(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 13, message_size, 0);
     conn.message_end(message_start);
@@ -3050,7 +3101,7 @@ pub const xdg_toplevel = struct {
     };
   };
 
-  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     _ = conn;
     var reader: wire.Reader = .{ .payload = payload };
     switch (opcode) {
@@ -3086,7 +3137,7 @@ pub const xdg_popup = struct {
   };
 
   /// remove xdg_popup interface
-  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+  pub fn destroy(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.message_end(message_start);
@@ -3094,7 +3145,7 @@ pub const xdg_popup = struct {
   }
 
   /// make the popup take an explicit grab
-  pub fn grab(conn: *wire.Connection, self: Id, seat: wl_seat.Id, serial: u32) !void {
+  pub fn grab(conn: *wire.Connection, self: Id, seat: wl_seat.Id, serial: u32) wire.Error!void {
     const message_size  = 16;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
     conn.put_uint(@intFromEnum(seat));
@@ -3103,7 +3154,12 @@ pub const xdg_popup = struct {
   }
 
   /// recalculate the popup's location
-  pub fn reposition(conn: *wire.Connection, self: Id, positioner: xdg_positioner.Id, token: u32) !void {
+  pub fn reposition(
+    conn: *wire.Connection,
+    self: Id,
+    positioner: xdg_positioner.Id,
+    token: u32,
+  ) wire.Error!void {
     const message_size  = 16;
     const message_start = try conn.message_begin(@intFromEnum(self), 2, message_size, 0);
     conn.put_uint(@intFromEnum(positioner));
@@ -3139,7 +3195,7 @@ pub const xdg_popup = struct {
     };
   };
 
-  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     _ = conn;
     var reader: wire.Reader = .{ .payload = payload };
     switch (opcode) {
@@ -3174,7 +3230,7 @@ pub const wp_viewporter = struct {
   };
 
   /// unbind from the cropping and scaling interface
-  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+  pub fn destroy(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.message_end(message_start);
@@ -3182,7 +3238,7 @@ pub const wp_viewporter = struct {
   }
 
   /// extend surface interface for crop and scale
-  pub fn get_viewport(conn: *wire.Connection, self: Id, surface: wl_surface.Id) !wp_viewport.Id {
+  pub fn get_viewport(conn: *wire.Connection, self: Id, surface: wl_surface.Id) wire.Error!wp_viewport.Id {
     const id            = try object_new(conn, wp_viewport);
     const message_size  = 16;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
@@ -3213,7 +3269,7 @@ pub const wp_viewport = struct {
   };
 
   /// remove scaling and cropping from the surface
-  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+  pub fn destroy(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.message_end(message_start);
@@ -3228,7 +3284,7 @@ pub const wp_viewport = struct {
     y: wire.Fixed,
     width: wire.Fixed,
     height: wire.Fixed,
-  ) !void {
+  ) wire.Error!void {
     const message_size  = 24;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
     conn.put_uint(@bitCast(@intFromEnum(x)));
@@ -3239,7 +3295,7 @@ pub const wp_viewport = struct {
   }
 
   /// set the surface size for scaling
-  pub fn set_destination(conn: *wire.Connection, self: Id, width: i32, height: i32) !void {
+  pub fn set_destination(conn: *wire.Connection, self: Id, width: i32, height: i32) wire.Error!void {
     const message_size  = 16;
     const message_start = try conn.message_begin(@intFromEnum(self), 2, message_size, 0);
     conn.put_uint(@bitCast(width));
@@ -3266,7 +3322,7 @@ pub const wp_presentation = struct {
   };
 
   /// unbind from the presentation interface
-  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+  pub fn destroy(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.message_end(message_start);
@@ -3274,7 +3330,11 @@ pub const wp_presentation = struct {
   }
 
   /// request presentation feedback information
-  pub fn feedback(conn: *wire.Connection, self: Id, surface: wl_surface.Id) !wp_presentation_feedback.Id {
+  pub fn feedback(
+    conn: *wire.Connection,
+    self: Id,
+    surface: wl_surface.Id,
+  ) wire.Error!wp_presentation_feedback.Id {
     const callback      = try object_new(conn, wp_presentation_feedback);
     const message_size  = 16;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
@@ -3297,7 +3357,7 @@ pub const wp_presentation = struct {
     };
   };
 
-  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     _ = conn;
     var reader: wire.Reader = .{ .payload = payload };
     switch (opcode) {
@@ -3359,7 +3419,7 @@ pub const wp_presentation_feedback = struct {
     pub const Discarded = struct {};
   };
 
-  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     _ = conn;
     var reader: wire.Reader = .{ .payload = payload };
     switch (opcode) {
@@ -3391,7 +3451,7 @@ pub const zwp_linux_dmabuf_v1 = struct {
   pub const Id = enum(u32) { none = 0, _ };
 
   /// unbind the factory
-  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+  pub fn destroy(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.message_end(message_start);
@@ -3399,7 +3459,7 @@ pub const zwp_linux_dmabuf_v1 = struct {
   }
 
   /// create a temporary object for buffer parameters
-  pub fn create_params(conn: *wire.Connection, self: Id) !zwp_linux_buffer_params_v1.Id {
+  pub fn create_params(conn: *wire.Connection, self: Id) wire.Error!zwp_linux_buffer_params_v1.Id {
     const params_id     = try object_new(conn, zwp_linux_buffer_params_v1);
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
@@ -3409,7 +3469,7 @@ pub const zwp_linux_dmabuf_v1 = struct {
   }
 
   /// get default feedback
-  pub fn get_default_feedback(conn: *wire.Connection, self: Id) !zwp_linux_dmabuf_feedback_v1.Id {
+  pub fn get_default_feedback(conn: *wire.Connection, self: Id) wire.Error!zwp_linux_dmabuf_feedback_v1.Id {
     const id            = try object_new(conn, zwp_linux_dmabuf_feedback_v1);
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 2, message_size, 0);
@@ -3423,7 +3483,7 @@ pub const zwp_linux_dmabuf_v1 = struct {
     conn: *wire.Connection,
     self: Id,
     surface: wl_surface.Id,
-  ) !zwp_linux_dmabuf_feedback_v1.Id {
+  ) wire.Error!zwp_linux_dmabuf_feedback_v1.Id {
     const id            = try object_new(conn, zwp_linux_dmabuf_feedback_v1);
     const message_size  = 16;
     const message_start = try conn.message_begin(@intFromEnum(self), 3, message_size, 0);
@@ -3455,7 +3515,7 @@ pub const zwp_linux_dmabuf_v1 = struct {
     };
   };
 
-  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     _ = conn;
     var reader: wire.Reader = .{ .payload = payload };
     switch (opcode) {
@@ -3512,7 +3572,7 @@ pub const zwp_linux_buffer_params_v1 = struct {
   };
 
   /// delete this object, used or not
-  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+  pub fn destroy(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.message_end(message_start);
@@ -3529,7 +3589,7 @@ pub const zwp_linux_buffer_params_v1 = struct {
     stride: u32,
     modifier_hi: u32,
     modifier_lo: u32,
-  ) !void {
+  ) wire.Error!void {
     const message_size  = 28;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 1);
     conn.put_fd(fd);
@@ -3549,7 +3609,7 @@ pub const zwp_linux_buffer_params_v1 = struct {
     height: i32,
     format: u32,
     flags: zwp_linux_buffer_params_v1.Flags,
-  ) !void {
+  ) wire.Error!void {
     const message_size  = 24;
     const message_start = try conn.message_begin(@intFromEnum(self), 2, message_size, 0);
     conn.put_uint(@bitCast(width));
@@ -3567,7 +3627,7 @@ pub const zwp_linux_buffer_params_v1 = struct {
     height: i32,
     format: u32,
     flags: zwp_linux_buffer_params_v1.Flags,
-  ) !wl_buffer.Id {
+  ) wire.Error!wl_buffer.Id {
     const buffer_id     = try object_new(conn, wl_buffer);
     const message_size  = 28;
     const message_start = try conn.message_begin(@intFromEnum(self), 3, message_size, 0);
@@ -3581,7 +3641,7 @@ pub const zwp_linux_buffer_params_v1 = struct {
   }
 
   /// set the target device of the wl_buffer
-  pub fn set_sampling_device(conn: *wire.Connection, self: Id, device: []const u8) !void {
+  pub fn set_sampling_device(conn: *wire.Connection, self: Id, device: []const u8) wire.Error!void {
     const message_size  = 8 + wire.array_size(device);
     const message_start = try conn.message_begin(@intFromEnum(self), 4, message_size, 0);
     conn.put_array(device);
@@ -3606,7 +3666,7 @@ pub const zwp_linux_buffer_params_v1 = struct {
     pub const Failed = struct {};
   };
 
-  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     var reader: wire.Reader = .{ .payload = payload };
     switch (opcode) {
       0 => return .{ .created = .{
@@ -3634,7 +3694,7 @@ pub const zwp_linux_dmabuf_feedback_v1 = struct {
   };
 
   /// destroy the feedback object
-  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+  pub fn destroy(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.message_end(message_start);
@@ -3693,7 +3753,7 @@ pub const zwp_linux_dmabuf_feedback_v1 = struct {
     };
   };
 
-  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     var reader: wire.Reader = .{ .payload = payload };
     switch (opcode) {
       0 => return .{ .done = .{} },
@@ -3729,7 +3789,11 @@ pub const zwp_tablet_manager_v2 = struct {
   pub const Id = enum(u32) { none = 0, _ };
 
   /// get the tablet seat
-  pub fn get_tablet_seat(conn: *wire.Connection, self: Id, seat: wl_seat.Id) !zwp_tablet_seat_v2.Id {
+  pub fn get_tablet_seat(
+    conn: *wire.Connection,
+    self: Id,
+    seat: wl_seat.Id,
+  ) wire.Error!zwp_tablet_seat_v2.Id {
     const tablet_seat   = try object_new(conn, zwp_tablet_seat_v2);
     const message_size  = 16;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
@@ -3740,7 +3804,7 @@ pub const zwp_tablet_manager_v2 = struct {
   }
 
   /// release the memory for the tablet manager object
-  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+  pub fn destroy(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
     conn.message_end(message_start);
@@ -3756,7 +3820,7 @@ pub const zwp_tablet_seat_v2 = struct {
   pub const Id = enum(u32) { none = 0, _ };
 
   /// release the memory for the tablet seat object
-  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+  pub fn destroy(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.message_end(message_start);
@@ -3790,7 +3854,7 @@ pub const zwp_tablet_seat_v2 = struct {
     };
   };
 
-  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     var reader: wire.Reader = .{ .payload = payload };
     switch (opcode) {
       0 => return .{ .tablet_added = .{
@@ -3872,7 +3936,7 @@ pub const zwp_tablet_tool_v2 = struct {
     surface: wl_surface.Id,
     hotspot_x: i32,
     hotspot_y: i32,
-  ) !void {
+  ) wire.Error!void {
     const message_size  = 24;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.put_uint(serial);
@@ -3883,7 +3947,7 @@ pub const zwp_tablet_tool_v2 = struct {
   }
 
   /// destroy the tool object
-  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+  pub fn destroy(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
     conn.message_end(message_start);
@@ -4030,7 +4094,7 @@ pub const zwp_tablet_tool_v2 = struct {
     };
   };
 
-  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     _ = conn;
     var reader: wire.Reader = .{ .payload = payload };
     switch (opcode) {
@@ -4119,7 +4183,7 @@ pub const zwp_tablet_v2 = struct {
   };
 
   /// destroy the tablet object
-  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+  pub fn destroy(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.message_end(message_start);
@@ -4171,7 +4235,7 @@ pub const zwp_tablet_v2 = struct {
     };
   };
 
-  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     _ = conn;
     var reader: wire.Reader = .{ .payload = payload };
     switch (opcode) {
@@ -4209,7 +4273,12 @@ pub const zwp_tablet_pad_ring_v2 = struct {
   };
 
   /// set compositor feedback
-  pub fn set_feedback(conn: *wire.Connection, self: Id, description: []const u8, serial: u32) !void {
+  pub fn set_feedback(
+    conn: *wire.Connection,
+    self: Id,
+    description: []const u8,
+    serial: u32,
+  ) wire.Error!void {
     const message_size  = 12 + wire.string_size(description);
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.put_string(description);
@@ -4218,7 +4287,7 @@ pub const zwp_tablet_pad_ring_v2 = struct {
   }
 
   /// destroy the ring object
-  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+  pub fn destroy(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
     conn.message_end(message_start);
@@ -4257,7 +4326,7 @@ pub const zwp_tablet_pad_ring_v2 = struct {
     };
   };
 
-  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     _ = conn;
     var reader: wire.Reader = .{ .payload = payload };
     switch (opcode) {
@@ -4290,7 +4359,12 @@ pub const zwp_tablet_pad_strip_v2 = struct {
   };
 
   /// set compositor feedback
-  pub fn set_feedback(conn: *wire.Connection, self: Id, description: []const u8, serial: u32) !void {
+  pub fn set_feedback(
+    conn: *wire.Connection,
+    self: Id,
+    description: []const u8,
+    serial: u32,
+  ) wire.Error!void {
     const message_size  = 12 + wire.string_size(description);
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.put_string(description);
@@ -4299,7 +4373,7 @@ pub const zwp_tablet_pad_strip_v2 = struct {
   }
 
   /// destroy the strip object
-  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+  pub fn destroy(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
     conn.message_end(message_start);
@@ -4338,7 +4412,7 @@ pub const zwp_tablet_pad_strip_v2 = struct {
     };
   };
 
-  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     _ = conn;
     var reader: wire.Reader = .{ .payload = payload };
     switch (opcode) {
@@ -4365,7 +4439,7 @@ pub const zwp_tablet_pad_group_v2 = struct {
   pub const Id = enum(u32) { none = 0, _ };
 
   /// destroy the pad object
-  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+  pub fn destroy(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.message_end(message_start);
@@ -4427,7 +4501,7 @@ pub const zwp_tablet_pad_group_v2 = struct {
     };
   };
 
-  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     var reader: wire.Reader = .{ .payload = payload };
     switch (opcode) {
       0 => return .{ .buttons = .{
@@ -4478,7 +4552,7 @@ pub const zwp_tablet_pad_v2 = struct {
     button: u32,
     description: []const u8,
     serial: u32,
-  ) !void {
+  ) wire.Error!void {
     const message_size  = 16 + wire.string_size(description);
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.put_uint(button);
@@ -4488,7 +4562,7 @@ pub const zwp_tablet_pad_v2 = struct {
   }
 
   /// destroy the pad object
-  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+  pub fn destroy(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
     conn.message_end(message_start);
@@ -4558,7 +4632,7 @@ pub const zwp_tablet_pad_v2 = struct {
     pub const Removed = struct {};
   };
 
-  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     var reader: wire.Reader = .{ .payload = payload };
     switch (opcode) {
       0 => return .{ .group = .{
@@ -4599,7 +4673,12 @@ pub const zwp_tablet_pad_dial_v2 = struct {
   pub const Id = enum(u32) { none = 0, _ };
 
   /// set compositor feedback
-  pub fn set_feedback(conn: *wire.Connection, self: Id, description: []const u8, serial: u32) !void {
+  pub fn set_feedback(
+    conn: *wire.Connection,
+    self: Id,
+    description: []const u8,
+    serial: u32,
+  ) wire.Error!void {
     const message_size  = 12 + wire.string_size(description);
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.put_string(description);
@@ -4608,7 +4687,7 @@ pub const zwp_tablet_pad_dial_v2 = struct {
   }
 
   /// destroy the dial object
-  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+  pub fn destroy(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
     conn.message_end(message_start);
@@ -4635,7 +4714,7 @@ pub const zwp_tablet_pad_dial_v2 = struct {
     };
   };
 
-  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     _ = conn;
     var reader: wire.Reader = .{ .payload = payload };
     switch (opcode) {
@@ -4668,7 +4747,7 @@ pub const wp_linux_drm_syncobj_manager_v1 = struct {
   };
 
   /// destroy explicit synchronization factory object
-  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+  pub fn destroy(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.message_end(message_start);
@@ -4680,7 +4759,7 @@ pub const wp_linux_drm_syncobj_manager_v1 = struct {
     conn: *wire.Connection,
     self: Id,
     surface: wl_surface.Id,
-  ) !wp_linux_drm_syncobj_surface_v1.Id {
+  ) wire.Error!wp_linux_drm_syncobj_surface_v1.Id {
     const id            = try object_new(conn, wp_linux_drm_syncobj_surface_v1);
     const message_size  = 16;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
@@ -4695,7 +4774,7 @@ pub const wp_linux_drm_syncobj_manager_v1 = struct {
     conn: *wire.Connection,
     self: Id,
     fd: std.os.linux.fd_t,
-  ) !wp_linux_drm_syncobj_timeline_v1.Id {
+  ) wire.Error!wp_linux_drm_syncobj_timeline_v1.Id {
     const id            = try object_new(conn, wp_linux_drm_syncobj_timeline_v1);
     const message_size  = 12;
     const message_start = try conn.message_begin(@intFromEnum(self), 2, message_size, 1);
@@ -4714,7 +4793,7 @@ pub const wp_linux_drm_syncobj_timeline_v1 = struct {
   pub const Id = enum(u32) { none = 0, _ };
 
   /// destroy the timeline
-  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+  pub fn destroy(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.message_end(message_start);
@@ -4746,7 +4825,7 @@ pub const wp_linux_drm_syncobj_surface_v1 = struct {
   };
 
   /// destroy the surface synchronization object
-  pub fn destroy(conn: *wire.Connection, self: Id) !void {
+  pub fn destroy(conn: *wire.Connection, self: Id) wire.Error!void {
     const message_size  = 8;
     const message_start = try conn.message_begin(@intFromEnum(self), 0, message_size, 0);
     conn.message_end(message_start);
@@ -4760,7 +4839,7 @@ pub const wp_linux_drm_syncobj_surface_v1 = struct {
     timeline: wp_linux_drm_syncobj_timeline_v1.Id,
     point_hi: u32,
     point_lo: u32,
-  ) !void {
+  ) wire.Error!void {
     const message_size  = 20;
     const message_start = try conn.message_begin(@intFromEnum(self), 1, message_size, 0);
     conn.put_uint(@intFromEnum(timeline));
@@ -4776,7 +4855,7 @@ pub const wp_linux_drm_syncobj_surface_v1 = struct {
     timeline: wp_linux_drm_syncobj_timeline_v1.Id,
     point_hi: u32,
     point_lo: u32,
-  ) !void {
+  ) wire.Error!void {
     const message_size  = 20;
     const message_start = try conn.message_begin(@intFromEnum(self), 2, message_size, 0);
     conn.put_uint(@intFromEnum(timeline));
@@ -4827,7 +4906,7 @@ pub const Message = struct {
 };
 
 /// Decodes the next complete received message. Messages for unknown objects are skipped.
-pub fn event_next(conn: *wire.Connection) !?Message {
+pub fn event_next(conn: *wire.Connection) wire.Error!?Message {
   for (0..wire.RECV_MESSAGES_MAX) |_| {
     const message              = try conn.message_next() orelse return null;
     const interface: Interface = @enumFromInt(conn.object_interface(message.id));

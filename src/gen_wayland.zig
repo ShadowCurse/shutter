@@ -59,11 +59,11 @@ const HEADER =
   \\  return (ma & 0xfffff000) << 32 | (ma & 0xfff) << 8 | (mi & 0xffffff00) << 12 | (mi & 0xff);
   \\}
   \\
-  \\fn object_new(conn: *wire.Connection, comptime T: type) !T.Id {
+  \\fn object_new(conn: *wire.Connection, comptime T: type) wire.Error!T.Id {
   \\  return @enumFromInt(try conn.object_new(@intFromEnum(T.INTERFACE)));
   \\}
   \\
-  \\fn object_new_server(conn: *wire.Connection, id: u32, comptime T: type) !T.Id {
+  \\fn object_new_server(conn: *wire.Connection, id: u32, comptime T: type) wire.Error!T.Id {
   \\  return @enumFromInt(try conn.object_new_server(id, @intFromEnum(T.INTERFACE)));
   \\}
   \\
@@ -654,7 +654,7 @@ fn write_request_signature(w: *Writer, db: *const Database, message: *const Mess
     try w.print("{s}{f}: ", .{ separator, id(arg.name) });
     try write_arg_type(w, db, arg);
   }
-  try w.writeAll(if (multiline) ",\n  ) !" else ") !");
+  try w.writeAll(if (multiline) ",\n  ) wire.Error!" else ") wire.Error!");
   if (new_id) |arg| {
     if (arg.interface_index == NONE)
       try w.writeAll("T.Id")
@@ -798,7 +798,7 @@ fn write_interface_events(w: *Writer, db: *const Database, interface: *const Int
   }
   try w.writeAll(
     \\
-    \\  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) !Event {
+    \\  pub fn event_decode(conn: *wire.Connection, opcode: u16, payload: []const u32) wire.Error!Event {
     \\
   );
   if (!uses_conn) try w.writeAll("    _ = conn;\n");
@@ -849,7 +849,7 @@ fn write_events(w: *Writer, db: *const Database) !void {
     \\};
     \\
     \\/// Decodes the next complete received message. Messages for unknown objects are skipped.
-    \\pub fn event_next(conn: *wire.Connection) !?Message {
+    \\pub fn event_next(conn: *wire.Connection) wire.Error!?Message {
     \\  for (0..wire.RECV_MESSAGES_MAX) |_| {
     \\    const message              = try conn.message_next() orelse return null;
     \\    const interface: Interface = @enumFromInt(conn.object_interface(message.id));
@@ -981,7 +981,8 @@ test "write" {
 
   const expected = [_][]const u8{
     "/// core object\npub const wl_display = struct {",
-    "pub fn bind(conn: *wire.Connection, self: Id, name: u32, comptime T: type, version: u32) !T.Id {",
+    "pub fn bind(conn: *wire.Connection, self: Id, name: u32, comptime T: type, version: u32) " ++
+      "wire.Error!T.Id {",
     "const message_size  = 20 + wire.string_size(T.NAME);",
     "title: ?[]const u8,\n      transform: wl_output.Transform,",
     ".transform = @enumFromInt(try reader.uint()),",
