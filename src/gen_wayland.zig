@@ -33,6 +33,32 @@ const HEADER =
   \\  std.debug.assert(@intFromEnum(Interface.wl_display) == wire.DISPLAY_INTERFACE);
   \\}
   \\
+  \\// Layouts defined only in the text of protocol descriptions.
+  \\
+  \\/// Entry of the `zwp_linux_dmabuf_feedback_v1.format_table` file.
+  \\pub const DmabufFormatTableEntry = extern struct {
+  \\  format: u32,
+  \\  _padding: u32,
+  \\  modifier: u64,
+  \\};
+  \\
+  \\/// Element of the `zwp_linux_dmabuf_feedback_v1.tranche_formats` array: index into the format table.
+  \\pub const DmabufFormatIndex = u16;
+  \\
+  \\/// Content of the `zwp_linux_dmabuf_feedback_v1.main_device` and `tranche_target_device` arrays.
+  \\pub const DeviceNumber = u64;
+  \\
+  \\comptime {
+  \\  std.debug.assert(@sizeOf(DmabufFormatTableEntry) == 16);
+  \\}
+  \\
+  \\/// `dev_t` from device major and minor numbers, like `makedev` of glibc.
+  \\pub fn device_number(major: u32, minor: u32) DeviceNumber {
+  \\  const ma: u64 = major;
+  \\  const mi: u64 = minor;
+  \\  return (ma & 0xfffff000) << 32 | (ma & 0xfff) << 8 | (mi & 0xffffff00) << 12 | (mi & 0xff);
+  \\}
+  \\
   \\fn object_new(conn: *wire.Connection, comptime T: type) !T.Id {
   \\  return @enumFromInt(try conn.object_new(@intFromEnum(T.INTERFACE)));
   \\}
@@ -45,6 +71,11 @@ const HEADER =
 
 // Tests of the generated API. Expects wl_display, wl_registry and wl_compositor to exist.
 const FOOTER =
+  \\
+  \\test "device_number" {
+  \\  try std.testing.expectEqual(0xe280, device_number(226, 128));
+  \\  try std.testing.expectEqual(0x100056723489, device_number(0x1234, 0x56789));
+  \\}
   \\
   \\test "requests and events" {
   \\  var conn: wire.Connection = undefined;
