@@ -3,16 +3,27 @@ const assert = std.debug.assert;
 
 const fd_t = std.os.linux.fd_t;
 
+// Defined by the protocol (doc/book/src/Protocol.md of wayland):
+// - message header is 2 words: object id, then size (upper 16 bits) and opcode (lower 16 bits);
+// - `wl_display` is always object 1;
+// - client ids are [2, 0xfeffffff], server ids are [0xff000000, 0xffffffff], 0 is null.
+pub const HEADER_SIZE = 8;
+pub const DISPLAY_ID = 1;
+pub const SERVER_ID_FIRST = 0xff000000;
+
+// Limits of libwayland. The protocol does not define them, but compositors built on libwayland
+// enforce them:
+// - WL_MAX_MESSAGE_SIZE: bigger messages make the server drop the client;
+// - MAX_FDS_OUT: most fds sent with one `sendmsg`.
 pub const MESSAGE_SIZE_MAX = 4096;
 pub const FDS_MAX = 28;
+
+// Limits of this implementation. libwayland allows 0x00f00000 objects on each side.
 pub const CLIENT_OBJECTS_MAX = 4096;
 pub const SERVER_OBJECTS_MAX = 256;
-pub const SERVER_ID_FIRST = 0xff000000;
-pub const DISPLAY_ID = 1;
 // Value of `Interface.wl_display` in the generated bindings.
 pub const DISPLAY_INTERFACE = 1;
 
-pub const HEADER_SIZE = 8;
 const SEND_WORDS_MAX = 2 * MESSAGE_SIZE_MAX / 4;
 const RECV_WORDS_MAX = 4 * MESSAGE_SIZE_MAX / 4;
 // Upper bound of messages in the receive buffer.
@@ -27,6 +38,7 @@ const CmsgHeader = extern struct {
 };
 
 comptime {
+  assert(MESSAGE_SIZE_MAX <= std.math.maxInt(u16));
   assert(MESSAGE_SIZE_MAX <= SEND_WORDS_MAX * 4);
   assert(MESSAGE_SIZE_MAX <= RECV_WORDS_MAX * 4);
   assert(CLIENT_OBJECTS_MAX <= std.math.maxInt(u16) + 1);
@@ -443,6 +455,7 @@ pub const Connection = struct {
     const size  = words[1] >> 16;
     if (size < HEADER_SIZE) return error.InvalidMessage;
     if (size % 4 != 0) return error.InvalidMessage;
+    if (MESSAGE_SIZE_MAX < size) return error.InvalidMessage;
     if (len < size) return null;
 
     conn.recv_start += size;

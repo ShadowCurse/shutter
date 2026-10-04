@@ -88,6 +88,11 @@ test "invalid messages" {
   conn.recv_end = 8;
   try std.testing.expectError(error.InvalidMessage, conn.message_next());
 
+  // Allowed by the 16 bit size field, but bigger than the receive buffer: waiting for the rest of
+  // it would fill the buffer and trip an assertion in `receive`.
+  conn.recv_words[1] = 0x8000 << 16;
+  try std.testing.expectError(error.InvalidMessage, conn.message_next());
+
   var reader: Reader = .{ .payload = &.{ 100 } };
   try std.testing.expectError(error.InvalidMessage, reader.array());
   reader = .{ .payload = &.{ 1, 0x41 } };
